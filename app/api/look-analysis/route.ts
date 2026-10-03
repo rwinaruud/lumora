@@ -19,8 +19,6 @@ function parseInput(value: unknown): LookAnalysisInput {
   const images = value.images as Record<string, unknown>;
   return {
     images: {
-      original: parseImage(images.original, "The original photo"),
-      inspiration: parseImage(images.inspiration, "The inspiration image"),
       generated: parseImage(images.generated, "The generated Lumora", true),
     },
     ...(typeof requestBody.inspirationLookId === "string" && requestBody.inspirationLookId.length <= 64 ? { inspirationLookId: requestBody.inspirationLookId } : {}),

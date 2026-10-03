@@ -59,3 +59,33 @@ h1,h2,h3,p,figure { margin: 0; }.landing-copy h1,.flow-heading h1,.result-headin
 .analysis-thumb em { color: #82716a; font-size: 8px; font-style: normal; line-height: 1.2; overflow-wrap: anywhere; }
 .analysis-slot-meta { margin-top: 4px; display: block; color: #82716a; font-size: 8px; line-height: 1.35; overflow-wrap: anywhere; }
 .analysis-source { color: #9b8178; font-size: 8px; text-align: right; }
+.lumora-icon { width: 18px; height: 18px; display: block; flex: none; color: currentColor; }
+.button>.lumora-icon { width: 16px; height: 16px; }
+.back-button>.lumora-icon { width: 18px; height: 18px; color: var(--wine); }
+.upload-symbol>.lumora-icon { width: 18px; height: 18px; }
+.replace-copy .upload-symbol>.lumora-icon { width: 14px; height: 14px; }
+.look-check>.lumora-icon { width: 13px; height: 13px; }
+.hero-sticker>.lumora-icon { width: 25px; height: 25px; color: var(--wine); }
+.privacy-note>.lumora-icon { width: 16px; height: 16px; color: #a86e73; }
+.plus-join>.lumora-icon { width: 15px; height: 15px; }
+.generation-spark { width: 22px; height: 22px; display: grid; place-items: center; }
+.generation-spark>.lumora-icon { width: 100%; height: 100%; }
+.result-actions { margin-top: 24px; border-top: 1px solid var(--line); }
+.result-action { min-height: 96px; margin-top: 0; padding: 17px 10px; grid-template-columns: 28px minmax(0,1fr) auto; gap: 16px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; box-shadow: none; }
+.action-icon { width: 24px; height: 24px; border: 0; border-radius: 0; background: transparent; }
+.action-icon>.lumora-icon { width: 22px; height: 22px; }
+.action-meta { margin-left: 6px; padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 10px; font-weight: 400; letter-spacing: 0; text-transform: none; vertical-align: 1px; white-space: nowrap; }
+.share-page .flow-heading h1 { margin-top: 8px; }
+.share-page .share-actions { margin-top: 14px; }
+.share-page>.privacy-note { margin-top: 12px; }
+.back-button { min-height: 44px; padding-inline: 4px; }
+.brand { min-height: 44px; justify-content: center; }
+.comparison-toggle button { min-width: 72px; min-height: 44px; }
+.region-select select { min-height: 44px; }
+@media (max-width: 760px) {
+  .result-action { min-height: 0; padding: 15px 2px; grid-template-columns: 27px minmax(0,1fr); gap: 10px; }
+  .result-action .button { min-height: 44px; grid-column: 2; justify-self: start; margin-top: 8px; }
+  .share-page .flow-heading h1 { margin-top: 6px; }
+  .story-preview { margin-top: 18px; }
+  .share-page .share-actions { margin-top: 12px; }
+}
