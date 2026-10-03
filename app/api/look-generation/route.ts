@@ -1,6 +1,7 @@
 import { generateLookImage, type LookGenerationInput } from "@/lib/look-generation";
 import { createOpenAIImageProvider } from "@/lib/look-generation/openai-provider";
 import { assertPrivateStorageAccess, hasPrivateStorageConfiguration, storeGeneratedResult } from "@/lib/generated-result-storage";
+import { assertUsableSelfie, FaceGuardianRejection } from "@/lib/look-generation/face-guardian";
 import { enforceAiRateLimit } from "@/lib/api/ai-rate-limit";
 import { ApiRequestError, readJsonBody, requestErrorResponse, validateImageDataUrl } from "@/lib/api/request-validation";
 
@@ -32,6 +33,16 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof ApiRequestError) return requestErrorResponse(error);
     return Response.json({ error: { code: "INVALID_REQUEST", message: "The request body is invalid." } }, { status: 400, headers: { "Cache-Control": "no-store" } });
+  }
+
+  try {
+    await assertUsableSelfie(input.originalImage, apiKey, process.env.OPENAI_VISION_MODEL || "gpt-4o-mini");
+  } catch (error) {
+    if (error instanceof FaceGuardianRejection) {
+      return Response.json({ error: { code: "NO_USABLE_FACE", message: error.message } }, { status: 422, headers: { "Cache-Control": "no-store" } });
+    }
+    console.error("Lumora face check failed.", error);
+    return Response.json({ error: { code: "FACE_CHECK_UNAVAILABLE", message: "We couldn't check your photo just now. Please try again." } }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }
 
   try {
