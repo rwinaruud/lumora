@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { curatedLooks, heroPortrait, type CuratedLook } from "@/app/data/lumora-data";
+import { SiteFooter } from "./site-footer";
 import type { LookAnalysis, LookAnalysisCategories, LookAnalysisInput, LookCategory } from "@/lib/look-analysis";
 import type { LookGenerationResult } from "@/lib/look-generation";
 
@@ -306,6 +307,6 @@ export default function LumoraExperience() {
       {lookAnalysis ? <div className="product-options">{requirementGroups.map((group) => <RequirementGroupCard key={group.id} group={group} categories={lookAnalysis.categories} />)}</div> : <p className="feedback" role="status">{lookAnalysisError ?? "Look Analysis is not available for this Lumora."}</p>}
       <p className="shopping-note">Analyzed makeup requirements only · No retailer or product feed is connected.</p>{feedback && <p className="feedback" role="status">{feedback}</p>}</section>}
 
-    <footer className="site-footer"><span>© LUMORA BEAUTY</span><span>Keep you, you.</span><span>Private by default</span></footer>
+    <SiteFooter minimal={screen === "face" || screen === "inspiration" || screen === "confirmation" || screen === "generating"} />
   </main>;
 }
