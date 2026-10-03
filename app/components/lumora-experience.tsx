@@ -56,6 +56,26 @@ async function imageAsDataUrl(source: string): Promise<string> {
   return `data:image/jpeg;base64,${btoa(binary)}`;
 }
 
+async function analysisSafeImage(source: string): Promise<string> {
+  const bitmap = await createImageBitmap(await (await fetch(source)).blob());
+  try {
+    for (const maxEdge of [1536, 1280, 1024, 768]) {
+      const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+      const context = canvas.getContext("2d");
+      if (!context) break;
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      for (const quality of [0.85, 0.75, 0.65]) {
+        const dataUrl = canvas.toDataURL("image/jpeg", quality);
+        if (dataUrl.length <= 4_000_000) return dataUrl;
+      }
+    }
+  } finally { bitmap.close(); }
+  throw new Error("The Lumora could not be prepared for analysis.");
+}
+
 function apiErrorMessage(payload: unknown, fallback: string): string {
   if (typeof payload !== "object" || payload === null || !("error" in payload)) return fallback;
   const error = payload.error;
@@ -169,13 +189,13 @@ export default function LumoraExperience() {
         if (!isActive) return;
         setGeneratedImage(generationPayload.imageDataUrl);
 
-        const analysisInput: LookAnalysisInput = {
-          images: {
-            generated: { uri: generationPayload.imageDataUrl, mediaType: "image/jpeg" },
-          },
-          ...(selectedLook ? { inspirationLookId: selectedLook.id } : {}),
-        };
         try {
+          const analysisInput: LookAnalysisInput = {
+            images: {
+              generated: { uri: await analysisSafeImage(generationPayload.imageDataUrl), mediaType: "image/jpeg" },
+            },
+            ...(selectedLook ? { inspirationLookId: selectedLook.id } : {}),
+          };
           const analysisResponse = await fetch("/api/look-analysis", {
             method: "POST",
             headers: { "Content-Type": "application/json" },

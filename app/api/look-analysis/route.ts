@@ -7,7 +7,8 @@ export const runtime = "nodejs";
 
 function parseImage(value: unknown, label: string, required = false): LookAnalysisImage | undefined {
   if (value === undefined && !required) return undefined;
-  const uri = validateImageDataUrl(value, label);
+  const source = typeof value === "object" && value !== null && !Array.isArray(value) && "uri" in value ? (value as { uri: unknown }).uri : value;
+  const uri = validateImageDataUrl(source, label);
   return { uri, mediaType: uri.slice(5, uri.indexOf(";")) };
 }
 
