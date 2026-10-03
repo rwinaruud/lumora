@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { trackEvent, trackEventOnce } from "@/lib/analytics";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { curatedLooks, heroPortrait, type CuratedLook } from "@/app/data/lumora-data";
 import { clearStoredJobId, createJobId, readStoredJobId, storeJobId, waitForPoll } from "@/lib/generation-job-client";
@@ -80,6 +81,7 @@ async function analysisSafeImage(source: string): Promise<string> {
 }
 
 class NoUsableFaceError extends Error {}
+class RateLimitError extends Error {}
 
 class GenerationTimeout extends Error {
   constructor() { super("Lumora is taking longer than expected. Please try again."); }
@@ -194,6 +196,9 @@ export default function LumoraExperience() {
     return () => { isActive = false; };
   }, [screen, generatedImage]);
   useEffect(() => {
+    if (screen === "result" && resultId) trackEventOnce(`result_viewed:${resultId}`, "result_viewed", { provider: "openai" });
+  }, [screen, resultId]);
+  useEffect(() => {
     if (screen !== "generating" || startedGenerationAttempt.current === generationAttempt) return;
     startedGenerationAttempt.current = generationAttempt;
     let isActive = true;
@@ -207,6 +212,7 @@ export default function LumoraExperience() {
         if (!recovering && !inspirationSource) throw new Error("Choose or upload an inspiration before creating your Lumora.");
         const jobId = jobIdRef.current ?? createJobId();
         jobIdRef.current = jobId;
+        if (!recovering) trackEvent("generation_started", { provider: "openai", inspiration_source: inspirationPhoto ? "upload" : "curated", ...(selectedLook ? { inspiration_look_id: selectedLook.id } : {}) });
         storeJobId(jobId);
         const requestBody = recovering ? null : JSON.stringify({ jobId, originalImage: await imageAsDataUrl(originalImage!.src), inspirationImage: await imageAsDataUrl(inspirationSource!) });
         if (!isActive) return;
@@ -226,6 +232,7 @@ export default function LumoraExperience() {
             if (response.status === 202) submitted = true;
             else if (response.ok && payload.status === "completed" && payload.previewDataUrl && payload.resultId) generationPayload = payload as LookGenerationResult;
             else if (response.status === 422) throw new NoUsableFaceError(apiErrorMessage(payload, "We couldn't find a clear face in this photo."));
+            else if (response.status === 429) throw new RateLimitError(apiErrorMessage(payload, "Lumora couldn't create this image."));
             else if (response.status === 502 || response.status === 400 || response.status === 422 || response.status === 429 || (response.status === 503 && !submitted)) {
               throw new Error(apiErrorMessage(payload, "Lumora couldn't create this image."));
             }
@@ -236,6 +243,7 @@ export default function LumoraExperience() {
           }
           if (!generationPayload) await waitForPoll(2000);
         }
+        trackEventOnce(`generation_completed:${jobId}`, "generation_completed", { provider: "openai", inspiration_source: inspirationPhoto ? "upload" : "curated" });
         clearStoredJobId();
         jobIdRef.current = null;
         if (!isActive) return;
@@ -270,6 +278,7 @@ export default function LumoraExperience() {
           setScreen("result");
         }
       } catch (error) {
+        if (isActive) trackEvent("generation_failed", { provider: "openai", reason: error instanceof NoUsableFaceError ? "face_rejected" : error instanceof RateLimitError ? "rate_limit" : error instanceof GenerationTimeout ? "timeout" : error instanceof TypeError ? "network_error" : "generation_error" });
         if (!(error instanceof GenerationTimeout)) { clearStoredJobId(); jobIdRef.current = null; }
         if (isActive) setNeedsNewPhoto(error instanceof NoUsableFaceError);
         if (isActive) setGenerationError(error instanceof Error ? error.message : "Lumora couldn't create this image. Please try again.");
@@ -299,6 +308,7 @@ export default function LumoraExperience() {
   }
   async function shareLook(origin: "result" | "story" = "story") {
     setFeedback("");
+    trackEvent("share_clicked", { origin: origin === "result" ? "result_screen" : "story_screen" });
     if (!resultId) {
       setFeedback("This Lumora could not be shared. Please try again.");
       return;
@@ -312,11 +322,12 @@ export default function LumoraExperience() {
       }
       if (storyFile && navigator.canShare?.({ files: [storyFile] })) {
         await navigator.share({ files: [storyFile], title: "My Lumora", text: `${text} ${shareUrl}` });
+        trackEvent("share_completed", { method: "native_file" });
         return;
       }
       if (origin === "result") { setScreen("share"); return; }
-      if (navigator.share) await navigator.share({ title: "My Lumora", text, url: shareUrl });
-      else if (navigator.clipboard) { await navigator.clipboard.writeText(shareUrl); setFeedback("Link copied. Your share is always up to you."); }
+      if (navigator.share) { await navigator.share({ title: "My Lumora", text, url: shareUrl }); trackEvent("share_completed", { method: "native_link" }); }
+      else if (navigator.clipboard) { await navigator.clipboard.writeText(shareUrl); trackEvent("share_completed", { method: "copy_link" }); setFeedback("Link copied. Your share is always up to you."); }
       else setFeedback("Your Story is ready to share whenever you are.");
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
@@ -332,7 +343,7 @@ export default function LumoraExperience() {
       storyFileRef.current = { src: generatedImage, file };
       // iOS Safari ignores <a download>; the share sheet offers "Save Image" and "Save to Files".
       if (navigator.canShare?.({ files: [file] })) {
-        try { await navigator.share({ files: [file], title: "My Lumora Story" }); return; }
+        try { await navigator.share({ files: [file], title: "My Lumora Story" }); trackEvent("story_saved", { method: "share_sheet" }); return; }
         catch (error) {
           if (error instanceof DOMException && error.name === "AbortError") return;
           console.error("Save via share sheet failed", error);
@@ -346,6 +357,7 @@ export default function LumoraExperience() {
       link.click();
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 10000);
+      trackEvent("story_saved", { method: "download" });
       setFeedback("Story saved.");
     } catch { setFeedback("Your Story could not be saved. Please try again."); }
   }
@@ -363,6 +375,7 @@ export default function LumoraExperience() {
       if (!response.ok || typeof payload.url !== "string") {
         throw new Error(apiErrorMessage(payload, "Checkout is temporarily unavailable. Please try again."));
       }
+      trackEvent("checkout_started", { value: 1.95, currency: "EUR" });
       window.location.assign(payload.url);
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : "Checkout is temporarily unavailable. Please try again.");
@@ -411,7 +424,7 @@ export default function LumoraExperience() {
         <div className="comparison-toggle" role="group" aria-label="Compare your photo and Lumora preview"><button type="button" className={comparison === "before" ? "active" : ""} aria-pressed={comparison === "before"} onClick={() => setComparison("before")}>Before</button><button type="button" className={comparison === "after" ? "active" : ""} aria-pressed={comparison === "after"} onClick={() => setComparison("after")}>After</button></div></div>
       <div className="result-actions">
         <article className="result-action"><span className="action-icon"><Icon name="share" /></span><div><h2>Share your look <span className="action-free">Free</span></h2><p>Show your Lumora on Instagram, TikTok or Stories.</p></div><button className="button button-primary" type="button" onClick={() => void shareLook("result")}>Share <Icon name="arrow-right" /></button></article>
-        <article className="result-action"><span className="action-icon"><Icon name="sparkle" /></span><div><h2>Love the look?</h2><p>Recreate it in real life.</p></div><button className="button button-secondary" type="button" onClick={() => { setFeedback(""); setScreen("shop"); }}>Get this look <Icon name="arrow-right" /></button></article>
+        <article className="result-action"><span className="action-icon"><Icon name="sparkle" /></span><div><h2>Love the look?</h2><p>Recreate it in real life.</p></div><button className="button button-secondary" type="button" onClick={() => { setFeedback(""); trackEvent("get_this_look_clicked", { has_analysis: !!lookAnalysis }); setScreen("shop"); }}>Get this look <Icon name="arrow-right" /></button></article>
         <article className="result-action"><span className="action-icon"><Icon name="download" /></span><div><h2>Download HD <span className="action-meta">€1.95</span></h2><p>High-resolution · No Lumora branding.</p></div><button className="button button-secondary" type="button" disabled={!resultId || checkoutLoading} onClick={() => { void beginCheckout(); }}>{checkoutLoading ? "Opening Checkout…" : "Download HD · €1.95"} <Icon name="arrow-right" /></button></article></div>
       {process.env.NODE_ENV !== "production" && <details className="look-analysis-inspector"><summary>Development · Look analysis</summary>{lookAnalysisError ? <p role="status">{lookAnalysisError}</p> : lookAnalysis ? <pre>{JSON.stringify(lookAnalysis, null, 2)}</pre> : <p>Analysis is being prepared.</p>}</details>}
       {feedback && <p className="feedback" role="status">{feedback}</p>}</section>}
