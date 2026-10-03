@@ -30,6 +30,13 @@ function spaced(ctx: CanvasRenderingContext2D, text: string, x: number, y: numbe
   ctx.letterSpacing = "0px";
 }
 
+// Right-aligned text with letter spacing leaves a trailing gap; compensate so edges line up.
+function spacedAt(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, spacing: number) {
+  ctx.letterSpacing = `${spacing}px`;
+  ctx.fillText(text, ctx.textAlign === "right" ? x + spacing : x, y);
+  ctx.letterSpacing = "0px";
+}
+
 // Renders the branded 1080x1920 Story from the free preview only.
 export async function createStoryFile(previewSrc: string): Promise<File> {
   const image = await loadImage(previewSrc);
@@ -61,14 +68,20 @@ export async function createStoryFile(previewSrc: string): Promise<File> {
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-  ctx.textAlign = "center";
-  ctx.textBaseline = "alphabetic";
+  // Top row mirrors the in-app Story preview: logo left, tagline right, on one line.
+  const margin = 67;
+  const topY = 100;
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "left";
   ctx.fillStyle = "#fff";
-  ctx.font = `600 64px ${SERIF}`;
-  spaced(ctx, "LUMORA", WIDTH / 2, 200, 14);
-  ctx.font = "500 24px system-ui, -apple-system, sans-serif";
+  ctx.font = `400 48px ${SERIF}`;
+  spacedAt(ctx, "LUMORA", margin, topY, 7);
+  ctx.textAlign = "right";
   ctx.fillStyle = "rgba(255,255,255,.85)";
-  spaced(ctx, "BEAUTY, MADE PERSONAL", WIDTH / 2, 252, 6);
+  ctx.font = "500 26px system-ui, -apple-system, sans-serif";
+  spacedAt(ctx, "BEAUTY, MADE PERSONAL", WIDTH - margin, topY, 4.5);
+  ctx.textBaseline = "alphabetic";
+  ctx.textAlign = "center";
 
   ctx.fillStyle = "rgba(255,255,255,.85)";
   ctx.font = "500 28px system-ui, -apple-system, sans-serif";
