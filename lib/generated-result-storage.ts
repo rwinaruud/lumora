@@ -46,7 +46,9 @@ export async function createFreePreview(originalBytes: Buffer): Promise<Buffer> 
     .toBuffer();
 }
 
-export async function storeGeneratedResult(imageDataUrl: string): Promise<{ previewDataUrl: string; resultId: string }> {
+export type StoredResult = { previewDataUrl: string; resultId: string };
+
+export async function storeGeneratedResult(imageDataUrl: string): Promise<StoredResult> {
   const match = generatedJpegPattern.exec(imageDataUrl);
   if (!match) throw new Error("The generated image is not a valid JPEG data URL.");
 
@@ -84,4 +86,66 @@ export async function readPrivateResult(resultId: string): Promise<Blob> {
   const { data, error } = await getPrivateBucket().download(resultPath(resultId));
   if (error) throw new Error("The private result could not be retrieved.", { cause: error });
   return data;
+}
+
+const jobIdPattern = /^[A-Za-z0-9_-]{43}$/;
+const pendingJobMaxAgeMs = 6 * 60 * 1000;
+
+export type GenerationJob =
+  | { status: "pending"; createdAt: number }
+  | { status: "completed"; resultId: string; provider: string; model: string }
+  | { status: "failed"; message: string };
+
+export function isValidJobId(value: unknown): value is string {
+  return typeof value === "string" && jobIdPattern.test(value);
+}
+
+function jobPath(jobId: string): string {
+  if (!isValidJobId(jobId)) throw new Error("The Lumora job ID is invalid.");
+  return `jobs/${jobId}.json`;
+}
+
+function jobBytes(job: GenerationJob): Buffer {
+  return Buffer.from(JSON.stringify(job));
+}
+
+export async function readGenerationJob(jobId: string): Promise<GenerationJob | null> {
+  const { data, error } = await getPrivateBucket().download(jobPath(jobId));
+  if (error) {
+    const status = (error as { status?: number; statusCode?: string | number }).status ?? Number((error as { statusCode?: string | number }).statusCode);
+    const original = (error as { originalError?: { status?: number } }).originalError?.status;
+    if (status === 400 || status === 404 || original === 400 || original === 404 || /not found/i.test(error.message)) return null;
+    throw new Error("The generation job could not be read.", { cause: error });
+  }
+  const job = JSON.parse(await data.text()) as GenerationJob;
+  if (job.status === "pending" && Date.now() - job.createdAt > pendingJobMaxAgeMs) {
+    return { status: "failed", message: "Lumora couldn't create this image. Please try again." };
+  }
+  return job;
+}
+
+// Atomic create: returns false when this job ID already exists.
+export async function createPendingGenerationJob(jobId: string): Promise<boolean> {
+  const { error } = await getPrivateBucket().upload(jobPath(jobId), jobBytes({ status: "pending", createdAt: Date.now() }), {
+    contentType: "application/json",
+    cacheControl: "0",
+    upsert: false,
+  });
+  if (!error) return true;
+  if (/already exists|duplicate/i.test(error.message) || (error as { statusCode?: string }).statusCode === "409") return false;
+  throw new Error("The generation job could not be created.", { cause: error });
+}
+
+export async function finishGenerationJob(jobId: string, job: Exclude<GenerationJob, { status: "pending" }>): Promise<void> {
+  const { error } = await getPrivateBucket().upload(jobPath(jobId), jobBytes(job), {
+    contentType: "application/json",
+    cacheControl: "0",
+    upsert: true,
+  });
+  if (error) throw new Error("The generation job could not be updated.", { cause: error });
+}
+
+export async function previewForResult(resultId: string): Promise<string> {
+  const original = Buffer.from(await (await readPrivateResult(resultId)).arrayBuffer());
+  return `data:image/jpeg;base64,${(await createFreePreview(original)).toString("base64")}`;
 }

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { curatedLooks, heroPortrait, type CuratedLook } from "@/app/data/lumora-data";
+import { clearStoredJobId, createJobId, readStoredJobId, storeJobId, waitForPoll } from "@/lib/generation-job-client";
 import { createStoryFile } from "@/lib/story-image";
 import { SiteFooter } from "./site-footer";
 import type { LookAnalysis, LookAnalysisCategories, LookAnalysisInput, LookCategory } from "@/lib/look-analysis";
@@ -76,6 +77,10 @@ async function analysisSafeImage(source: string): Promise<string> {
     }
   } finally { bitmap.close(); }
   throw new Error("The Lumora could not be prepared for analysis.");
+}
+
+class GenerationTimeout extends Error {
+  constructor() { super("Lumora is taking longer than expected. Please try again."); }
 }
 
 function apiErrorMessage(payload: unknown, fallback: string): string {
@@ -165,8 +170,18 @@ export default function LumoraExperience() {
   const [lookAnalysis, setLookAnalysis] = useState<LookAnalysis | null>(null);
   const [lookAnalysisError, setLookAnalysisError] = useState<string | null>(null);
   const startedGenerationAttempt = useRef<number | null>(null);
+  const jobIdRef = useRef<string | null>(null);
+  const recoverJobRef = useRef(false);
   const storyFileRef = useRef<{ src: string; file: File } | null>(null);
 
+  useEffect(() => {
+    const storedJobId = readStoredJobId();
+    if (!storedJobId) return;
+    jobIdRef.current = storedJobId;
+    recoverJobRef.current = true;
+    const timer = window.setTimeout(() => { setGenerationAttempt(1); setScreen("generating"); }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
   useEffect(() => () => { if (originalImage?.src.startsWith("blob:")) URL.revokeObjectURL(originalImage.src); }, [originalImage]);
   useEffect(() => () => { if (inspirationPhoto?.src.startsWith("blob:")) URL.revokeObjectURL(inspirationPhoto.src); }, [inspirationPhoto]);
   useEffect(() => {
@@ -182,21 +197,43 @@ export default function LumoraExperience() {
     const lineTimer = window.setInterval(() => setGenerationLine((line) => (line + 1) % generationLines.length), 1550);
     void (async () => {
       try {
-        if (!originalImage) throw new Error("Upload your photo again before creating your Lumora.");
+        const recovering = recoverJobRef.current;
+        recoverJobRef.current = false;
+        if (!recovering && !originalImage) throw new Error("Upload your photo again before creating your Lumora.");
         const inspirationSource = inspirationPhoto?.src ?? selectedLook?.image;
-        if (!inspirationSource) throw new Error("Choose or upload an inspiration before creating your Lumora.");
-        const originalImageData = await imageAsDataUrl(originalImage.src);
-        const inspirationImage = await imageAsDataUrl(inspirationSource);
+        if (!recovering && !inspirationSource) throw new Error("Choose or upload an inspiration before creating your Lumora.");
+        const jobId = jobIdRef.current ?? createJobId();
+        jobIdRef.current = jobId;
+        storeJobId(jobId);
+        const requestBody = recovering ? null : JSON.stringify({ jobId, originalImage: await imageAsDataUrl(originalImage!.src), inspirationImage: await imageAsDataUrl(inspirationSource!) });
         if (!isActive) return;
-        const generationResponse = await fetch("/api/look-generation", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ originalImage: originalImageData, inspirationImage }),
-        });
-        const generationPayload = await generationResponse.json() as LookGenerationResult | { error?: string | { code?: string; message?: string; retryAfterSeconds?: number } };
-        if (!generationResponse.ok || !("previewDataUrl" in generationPayload) || !generationPayload.previewDataUrl || !generationPayload.resultId) {
-          throw new Error(apiErrorMessage(generationPayload, "Lumora couldn't create this image."));
+        let generationPayload: LookGenerationResult | null = null;
+        let submitted = recovering;
+        const deadline = Date.now() + 7 * 60 * 1000;
+        while (!generationPayload) {
+          if (!isActive) return;
+          if (Date.now() > deadline) throw new GenerationTimeout();
+          try {
+            const response = !submitted
+              ? await fetch("/api/look-generation", { method: "POST", headers: { "Content-Type": "application/json" }, body: requestBody })
+              : await fetch(`/api/look-generation/${jobId}`, { cache: "no-store" });
+            if (response.status === 404 && submitted && !recovering) { submitted = false; continue; }
+            if (response.status === 404) throw new Error("We couldn't recover your Lumora. Please start again.");
+            const payload = await response.json() as Partial<LookGenerationResult> & { status?: string; error?: unknown };
+            if (response.status === 202) submitted = true;
+            else if (response.ok && payload.status === "completed" && payload.previewDataUrl && payload.resultId) generationPayload = payload as LookGenerationResult;
+            else if (response.status === 502 || response.status === 400 || response.status === 422 || response.status === 429 || (response.status === 503 && !submitted)) {
+              throw new Error(apiErrorMessage(payload, "Lumora couldn't create this image."));
+            }
+            else if (response.ok) submitted = true;
+          } catch (error) {
+            // Network failures (for example Safari resuming from the background) are retried against the same job.
+            if (!(error instanceof TypeError || error instanceof SyntaxError)) throw error;
+          }
+          if (!generationPayload) await waitForPoll(2000);
         }
+        clearStoredJobId();
+        jobIdRef.current = null;
         if (!isActive) return;
         setGeneratedImage(generationPayload.previewDataUrl);
         setResultId(generationPayload.resultId);
@@ -229,6 +266,7 @@ export default function LumoraExperience() {
           setScreen("result");
         }
       } catch (error) {
+        if (!(error instanceof GenerationTimeout)) { clearStoredJobId(); jobIdRef.current = null; }
         if (isActive) setGenerationError(error instanceof Error ? error.message : "Lumora couldn't create this image. Please try again.");
       }
     })();
@@ -350,7 +388,7 @@ export default function LumoraExperience() {
 
     {screen === "confirmation" && originalImage && chosenInspiration && <section className="flow-page confirmation-page"><Progress current={3} /><div className="flow-heading"><span className="eyebrow">03 — YOUR LUMORA</span><h1>Ready to see your look?</h1><p>A little inspiration, a lot of you.</p></div>
       <div className="confirmation-images"><figure><div className="confirmation-photo"><Photo src={originalImage.src} alt="Your uploaded photo" /></div><figcaption>YOUR PHOTO</figcaption></figure><span className="plus-join" aria-hidden="true"><Icon name="plus" /></span><figure><div className="confirmation-photo"><Photo src={chosenInspiration.src} alt={chosenInspiration.alt} /></div><figcaption>YOUR INSPIRATION</figcaption></figure></div>
-      <p className="confirmation-copy">Lumora recreates the makeup look on you while keeping you, you.</p><button className="button button-primary create-button" type="button" onClick={() => { setGenerationLine(0); setGeneratedImage(null); setResultId(null); setGenerationError(null); setLookAnalysis(null); setLookAnalysisError(null); setGenerationAttempt((attempt) => attempt + 1); setScreen("generating"); }}>Create my Lumora <Icon name="arrow-right" /></button>
+      <p className="confirmation-copy">Lumora recreates the makeup look on you while keeping you, you.</p><button className="button button-primary create-button" type="button" onClick={() => { clearStoredJobId(); jobIdRef.current = null; setGenerationLine(0); setGeneratedImage(null); setResultId(null); setGenerationError(null); setLookAnalysis(null); setLookAnalysisError(null); setGenerationAttempt((attempt) => attempt + 1); setScreen("generating"); }}>Create my Lumora <Icon name="arrow-right" /></button>
       <p className="price-note">Free preview <span>·</span> No subscription</p><p className="fine-print">High-resolution download €1.95.</p></section>}
 
     {screen === "generating" && <section className="generation-page" aria-live="polite" aria-atomic="true"><div className="generation-art"><div className="generation-halo" /><div className="generation-photo"><Photo src={originalImage?.src ?? heroPortrait} alt="Your portrait being prepared" /></div><span className="generation-orbit orbit-one" /><span className="generation-orbit orbit-two" /><span className="generation-spark spark-one"><Icon name="sparkle" /></span><span className="generation-spark spark-two"><Icon name="sparkle" /></span></div><span className="eyebrow">A MOMENT, JUST FOR YOU</span><h1>{generationLines[generationLine]}</h1>{generationError ? <div className="generation-error" role="alert"><p>{generationError}</p><button className="button button-outline" type="button" onClick={() => { setGenerationError(null); setGenerationAttempt((attempt) => attempt + 1); }}>Try again <Icon name="arrow-right" /></button></div> : <p>Keep you, you.</p>}</section>}
