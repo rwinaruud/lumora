@@ -153,6 +153,8 @@ export default function LumoraExperience() {
   const [inspirationPhoto, setInspirationPhoto] = useState<LocalImage | null>(null);
   const [selectedLook, setSelectedLook] = useState<CuratedLook | null>(null);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [resultId, setResultId] = useState<string | null>(null);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [generationLine, setGenerationLine] = useState(0);
   const [generationAttempt, setGenerationAttempt] = useState(0);
   const [generationError, setGenerationError] = useState<string | null>(null);
@@ -184,16 +186,17 @@ export default function LumoraExperience() {
           body: JSON.stringify({ originalImage: originalImageData, inspirationImage }),
         });
         const generationPayload = await generationResponse.json() as LookGenerationResult | { error?: string | { code?: string; message?: string; retryAfterSeconds?: number } };
-        if (!generationResponse.ok || !("imageDataUrl" in generationPayload) || !generationPayload.imageDataUrl) {
+        if (!generationResponse.ok || !("previewDataUrl" in generationPayload) || !generationPayload.previewDataUrl || !generationPayload.resultId) {
           throw new Error(apiErrorMessage(generationPayload, "Lumora couldn't create this image."));
         }
         if (!isActive) return;
-        setGeneratedImage(generationPayload.imageDataUrl);
+        setGeneratedImage(generationPayload.previewDataUrl);
+        setResultId(generationPayload.resultId);
 
         try {
           const analysisInput: LookAnalysisInput = {
             images: {
-              generated: { uri: await analysisSafeImage(generationPayload.imageDataUrl), mediaType: "image/jpeg" },
+              generated: { uri: await analysisSafeImage(generationPayload.previewDataUrl), mediaType: "image/jpeg" },
             },
             ...(selectedLook ? { inspirationLookId: selectedLook.id } : {}),
           };
@@ -245,11 +248,36 @@ export default function LumoraExperience() {
   }
   async function shareLook() {
     setFeedback("");
+    if (!resultId) {
+      setFeedback("This Lumora could not be shared. Please try again.");
+      return;
+    }
+    const shareUrl = new URL(`/share/${encodeURIComponent(resultId)}`, window.location.origin).toString();
     try {
-      if (navigator.share) await navigator.share({ title: "My Lumora", text: "See the look. On you.", url: window.location.href });
-      else if (navigator.clipboard) { await navigator.clipboard.writeText(window.location.href); setFeedback("Link copied. Your share is always up to you."); }
+      if (navigator.share) await navigator.share({ title: "My Lumora", text: "See the look. On you.", url: shareUrl });
+      else if (navigator.clipboard) { await navigator.clipboard.writeText(shareUrl); setFeedback("Link copied. Your share is always up to you."); }
       else setFeedback("Your Story is ready to share whenever you are.");
     } catch { setFeedback("Your Story is ready to share whenever you are."); }
+  }
+  async function beginCheckout() {
+    if (!resultId || checkoutLoading) return;
+    setCheckoutLoading(true);
+    setFeedback("");
+    try {
+      const response = await fetch("/api/checkout-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resultId }),
+      });
+      const payload = await response.json() as { url?: unknown; error?: unknown };
+      if (!response.ok || typeof payload.url !== "string") {
+        throw new Error(apiErrorMessage(payload, "Checkout is temporarily unavailable. Please try again."));
+      }
+      window.location.assign(payload.url);
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Checkout is temporarily unavailable. Please try again.");
+      setCheckoutLoading(false);
+    }
   }
 
   const resultImage = generatedImage ?? heroPortrait;
@@ -283,7 +311,7 @@ export default function LumoraExperience() {
 
     {screen === "confirmation" && originalImage && chosenInspiration && <section className="flow-page confirmation-page"><Progress current={3} /><div className="flow-heading"><span className="eyebrow">03 — YOUR LUMORA</span><h1>Ready to see your look?</h1><p>A little inspiration, a lot of you.</p></div>
       <div className="confirmation-images"><figure><div className="confirmation-photo"><Photo src={originalImage.src} alt="Your uploaded photo" /></div><figcaption>YOUR PHOTO</figcaption></figure><span className="plus-join" aria-hidden="true"><Icon name="plus" /></span><figure><div className="confirmation-photo"><Photo src={chosenInspiration.src} alt={chosenInspiration.alt} /></div><figcaption>YOUR INSPIRATION</figcaption></figure></div>
-      <p className="confirmation-copy">Lumora recreates the makeup look on you while keeping you, you.</p><button className="button button-primary create-button" type="button" onClick={() => { setGenerationLine(0); setGeneratedImage(null); setGenerationError(null); setLookAnalysis(null); setLookAnalysisError(null); setGenerationAttempt((attempt) => attempt + 1); setScreen("generating"); }}>Create my Lumora <Icon name="arrow-right" /></button>
+      <p className="confirmation-copy">Lumora recreates the makeup look on you while keeping you, you.</p><button className="button button-primary create-button" type="button" onClick={() => { setGenerationLine(0); setGeneratedImage(null); setResultId(null); setGenerationError(null); setLookAnalysis(null); setLookAnalysisError(null); setGenerationAttempt((attempt) => attempt + 1); setScreen("generating"); }}>Create my Lumora <Icon name="arrow-right" /></button>
       <p className="price-note">Free preview <span>·</span> No subscription</p><p className="fine-print">High-resolution download €1.95.</p></section>}
 
     {screen === "generating" && <section className="generation-page" aria-live="polite" aria-atomic="true"><div className="generation-art"><div className="generation-halo" /><div className="generation-photo"><Photo src={originalImage?.src ?? heroPortrait} alt="Your portrait being prepared" /></div><span className="generation-orbit orbit-one" /><span className="generation-orbit orbit-two" /><span className="generation-spark spark-one"><Icon name="sparkle" /></span><span className="generation-spark spark-two"><Icon name="sparkle" /></span></div><span className="eyebrow">A MOMENT, JUST FOR YOU</span><h1>{generationLines[generationLine]}</h1>{generationError ? <div className="generation-error" role="alert"><p>{generationError}</p><button className="button button-outline" type="button" onClick={() => { setGenerationError(null); setGenerationAttempt((attempt) => attempt + 1); }}>Try again <Icon name="arrow-right" /></button></div> : <p>Keep you, you.</p>}</section>}
@@ -294,7 +322,7 @@ export default function LumoraExperience() {
       <div className="result-actions">
         <article className="result-action"><span className="action-icon"><Icon name="share" /></span><div><h2>Share your look <span className="action-free">Free</span></h2><p>Show your Lumora on Instagram, TikTok or Stories.</p></div><button className="button button-primary" type="button" onClick={() => { setFeedback(""); setScreen("share"); }}>Share <Icon name="arrow-right" /></button></article>
         <article className="result-action"><span className="action-icon"><Icon name="sparkle" /></span><div><h2>Love the look?</h2><p>Recreate it in real life.</p></div><button className="button button-secondary" type="button" onClick={() => { setFeedback(""); setScreen("shop"); }}>Get this look <Icon name="arrow-right" /></button></article>
-        <article className="result-action"><span className="action-icon"><Icon name="download" /></span><div><h2>Download HD <span className="action-meta">€1.95</span></h2><p>High-resolution · No Lumora branding.</p></div><button className="button button-secondary" type="button" onClick={() => { const link = document.createElement("a"); link.href = resultImage; link.download = "lumora-preview"; link.click(); setFeedback("Prototype preview downloaded using your uploaded photo."); }}>Download HD <Icon name="arrow-right" /></button></article></div>
+        <article className="result-action"><span className="action-icon"><Icon name="download" /></span><div><h2>Download HD <span className="action-meta">€1.95</span></h2><p>High-resolution · No Lumora branding.</p></div><button className="button button-secondary" type="button" disabled={!resultId || checkoutLoading} onClick={() => { void beginCheckout(); }}>{checkoutLoading ? "Opening Checkout…" : "Download HD · €1.95"} <Icon name="arrow-right" /></button></article></div>
       {process.env.NODE_ENV !== "production" && <details className="look-analysis-inspector"><summary>Development · Look analysis</summary>{lookAnalysisError ? <p role="status">{lookAnalysisError}</p> : lookAnalysis ? <pre>{JSON.stringify(lookAnalysis, null, 2)}</pre> : <p>Analysis is being prepared.</p>}</details>}
       {feedback && <p className="feedback" role="status">{feedback}</p>}</section>}
 

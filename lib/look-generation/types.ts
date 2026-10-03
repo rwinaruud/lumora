@@ -9,8 +9,15 @@ export type LookGenerationProvider = {
   generate(input: LookGenerationInput): Promise<string>;
 };
 
-export type LookGenerationResult = {
+export type GeneratedLookImage = {
   imageDataUrl: string;
+  provider: string;
+  model: string;
+};
+
+export type LookGenerationResult = {
+  previewDataUrl: string;
+  resultId: string;
   provider: string;
   model: string;
 };

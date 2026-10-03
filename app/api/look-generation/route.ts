@@ -1,5 +1,6 @@
 import { generateLookImage, type LookGenerationInput } from "@/lib/look-generation";
 import { createOpenAIImageProvider } from "@/lib/look-generation/openai-provider";
+import { assertPrivateStorageAccess, hasPrivateStorageConfiguration, storeGeneratedResult } from "@/lib/generated-result-storage";
 import { enforceAiRateLimit } from "@/lib/api/ai-rate-limit";
 import { ApiRequestError, readJsonBody, requestErrorResponse, validateImageDataUrl } from "@/lib/api/request-validation";
 
@@ -18,7 +19,7 @@ function parseInput(value: unknown): LookGenerationInput {
 
 export async function POST(request: Request) {
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
+  if (!apiKey || !hasPrivateStorageConfiguration()) {
     return Response.json({ error: { code: "SERVICE_UNAVAILABLE", message: "Image generation is temporarily unavailable." } }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }
 
@@ -34,9 +35,19 @@ export async function POST(request: Request) {
   }
 
   try {
+    await assertPrivateStorageAccess();
+  } catch (error) {
+    console.error("Lumora private image storage is unavailable.", error);
+    return Response.json({ error: { code: "SERVICE_UNAVAILABLE", message: "Image generation is temporarily unavailable." } }, { status: 503, headers: { "Cache-Control": "no-store" } });
+  }
+
+  try {
     const model = process.env.OPENAI_IMAGE_MODEL || "gpt-image-2.5-sunburst";
-    return Response.json(await generateLookImage(input, createOpenAIImageProvider(apiKey, model)), { headers: { "Cache-Control": "no-store" } });
-  } catch {
+    const generated = await generateLookImage(input, createOpenAIImageProvider(apiKey, model));
+    const stored = await storeGeneratedResult(generated.imageDataUrl);
+    return Response.json({ ...stored, provider: generated.provider, model: generated.model }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    console.error("Lumora generation or private storage failed.", error);
     return Response.json({ error: { code: "IMAGE_GENERATION_FAILED", message: "Lumora couldn't create this image. Please try again." } }, { status: 502, headers: { "Cache-Control": "no-store" } });
   }
 }
