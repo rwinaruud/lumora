@@ -79,6 +79,8 @@ async function analysisSafeImage(source: string): Promise<string> {
   throw new Error("The Lumora could not be prepared for analysis.");
 }
 
+class NoUsableFaceError extends Error {}
+
 class GenerationTimeout extends Error {
   constructor() { super("Lumora is taking longer than expected. Please try again."); }
 }
@@ -164,6 +166,7 @@ export default function LumoraExperience() {
   const [generationLine, setGenerationLine] = useState(0);
   const [generationAttempt, setGenerationAttempt] = useState(0);
   const [generationError, setGenerationError] = useState<string | null>(null);
+  const [needsNewPhoto, setNeedsNewPhoto] = useState(false);
   const [comparison, setComparison] = useState<"before" | "after">("after");
   const [region, setRegion] = useState("Netherlands");
   const [feedback, setFeedback] = useState("");
@@ -222,6 +225,7 @@ export default function LumoraExperience() {
             const payload = await response.json() as Partial<LookGenerationResult> & { status?: string; error?: unknown };
             if (response.status === 202) submitted = true;
             else if (response.ok && payload.status === "completed" && payload.previewDataUrl && payload.resultId) generationPayload = payload as LookGenerationResult;
+            else if (response.status === 422) throw new NoUsableFaceError(apiErrorMessage(payload, "We couldn't find a clear face in this photo."));
             else if (response.status === 502 || response.status === 400 || response.status === 422 || response.status === 429 || (response.status === 503 && !submitted)) {
               throw new Error(apiErrorMessage(payload, "Lumora couldn't create this image."));
             }
@@ -267,6 +271,7 @@ export default function LumoraExperience() {
         }
       } catch (error) {
         if (!(error instanceof GenerationTimeout)) { clearStoredJobId(); jobIdRef.current = null; }
+        if (isActive) setNeedsNewPhoto(error instanceof NoUsableFaceError);
         if (isActive) setGenerationError(error instanceof Error ? error.message : "Lumora couldn't create this image. Please try again.");
       }
     })();
@@ -325,6 +330,14 @@ export default function LumoraExperience() {
     try {
       const file = storyFileRef.current?.src === generatedImage ? storyFileRef.current.file : await createStoryFile(generatedImage);
       storyFileRef.current = { src: generatedImage, file };
+      // iOS Safari ignores <a download>; the share sheet offers "Save Image" and "Save to Files".
+      if (navigator.canShare?.({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: "My Lumora Story" }); return; }
+        catch (error) {
+          if (error instanceof DOMException && error.name === "AbortError") return;
+          console.error("Save via share sheet failed", error);
+        }
+      }
       const url = URL.createObjectURL(file);
       const link = document.createElement("a");
       link.href = url;
@@ -332,7 +345,7 @@ export default function LumoraExperience() {
       document.body.appendChild(link);
       link.click();
       link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      window.setTimeout(() => URL.revokeObjectURL(url), 10000);
       setFeedback("Story saved.");
     } catch { setFeedback("Your Story could not be saved. Please try again."); }
   }
@@ -388,10 +401,10 @@ export default function LumoraExperience() {
 
     {screen === "confirmation" && originalImage && chosenInspiration && <section className="flow-page confirmation-page"><Progress current={3} /><div className="flow-heading"><span className="eyebrow">03 — YOUR LUMORA</span><h1>Ready to see your look?</h1><p>A little inspiration, a lot of you.</p></div>
       <div className="confirmation-images"><figure><div className="confirmation-photo"><Photo src={originalImage.src} alt="Your uploaded photo" /></div><figcaption>YOUR PHOTO</figcaption></figure><span className="plus-join" aria-hidden="true"><Icon name="plus" /></span><figure><div className="confirmation-photo"><Photo src={chosenInspiration.src} alt={chosenInspiration.alt} /></div><figcaption>YOUR INSPIRATION</figcaption></figure></div>
-      <p className="confirmation-copy">Lumora recreates the makeup look on you while keeping you, you.</p><button className="button button-primary create-button" type="button" onClick={() => { clearStoredJobId(); jobIdRef.current = null; setGenerationLine(0); setGeneratedImage(null); setResultId(null); setGenerationError(null); setLookAnalysis(null); setLookAnalysisError(null); setGenerationAttempt((attempt) => attempt + 1); setScreen("generating"); }}>Create my Lumora <Icon name="arrow-right" /></button>
+      <p className="confirmation-copy">Lumora recreates the makeup look on you while keeping you, you.</p><button className="button button-primary create-button" type="button" onClick={() => { clearStoredJobId(); jobIdRef.current = null; setGenerationLine(0); setGeneratedImage(null); setResultId(null); setGenerationError(null); setNeedsNewPhoto(false); setLookAnalysis(null); setLookAnalysisError(null); setGenerationAttempt((attempt) => attempt + 1); setScreen("generating"); }}>Create my Lumora <Icon name="arrow-right" /></button>
       <p className="price-note">Free preview <span>·</span> No subscription</p><p className="fine-print">High-resolution download €1.95.</p></section>}
 
-    {screen === "generating" && <section className="generation-page" aria-live="polite" aria-atomic="true"><div className="generation-art"><div className="generation-halo" /><div className="generation-photo"><Photo src={originalImage?.src ?? heroPortrait} alt="Your portrait being prepared" /></div><span className="generation-orbit orbit-one" /><span className="generation-orbit orbit-two" /><span className="generation-spark spark-one"><Icon name="sparkle" /></span><span className="generation-spark spark-two"><Icon name="sparkle" /></span></div><span className="eyebrow">A MOMENT, JUST FOR YOU</span><h1>{generationLines[generationLine]}</h1>{generationError ? <div className="generation-error" role="alert"><p>{generationError}</p><button className="button button-outline" type="button" onClick={() => { setGenerationError(null); setGenerationAttempt((attempt) => attempt + 1); }}>Try again <Icon name="arrow-right" /></button></div> : <p>Keep you, you.</p>}</section>}
+    {screen === "generating" && <section className="generation-page" aria-live="polite" aria-atomic="true"><div className="generation-art"><div className="generation-halo" /><div className="generation-photo"><Photo src={originalImage?.src ?? heroPortrait} alt="Your portrait being prepared" /></div><span className="generation-orbit orbit-one" /><span className="generation-orbit orbit-two" /><span className="generation-spark spark-one"><Icon name="sparkle" /></span><span className="generation-spark spark-two"><Icon name="sparkle" /></span></div><span className="eyebrow">A MOMENT, JUST FOR YOU</span><h1>{generationLines[generationLine]}</h1>{generationError ? <div className="generation-error" role="alert"><p>{generationError}</p>{needsNewPhoto ? <button className="button button-outline" type="button" onClick={() => { clearStoredJobId(); jobIdRef.current = null; setGenerationError(null); setNeedsNewPhoto(false); setOriginalImage(null); setScreen("face"); }}>Choose another photo <Icon name="arrow-right" /></button> : <button className="button button-outline" type="button" onClick={() => { setGenerationError(null); setGenerationAttempt((attempt) => attempt + 1); }}>Try again <Icon name="arrow-right" /></button>}</div> : <p>Keep you, you.</p>}</section>}
 
     {screen === "result" && <section className="result-page"><div className="result-heading"><span className="eyebrow">MADE WITH LUMORA</span><h1>Your Lumora</h1><p>The look you loved. Now on you.</p></div>
       <div className="result-visual"><div className={`result-photo ${comparison === "before" ? "is-before" : "is-after"}`}><Photo src={comparison === "before" ? originalImage?.src ?? heroPortrait : generatedImage ?? heroPortrait} alt={comparison === "before" ? "Your original photo" : "Your Lumora makeup look"} priority /></div><div className="result-brand-mark">LUMORA <span>BEAUTY</span></div>

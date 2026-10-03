@@ -2,13 +2,26 @@ const WIDTH = 1080;
 const HEIGHT = 1920;
 const SERIF = '"Iowan Old Style", Baskerville, Palatino, Georgia, serif';
 
-function loadImage(src: string) {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
-    const image = new window.Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("Story image could not be loaded."));
-    image.src = src;
-  });
+async function loadImage(src: string) {
+  const image = new window.Image();
+  image.src = src;
+  // decode() guarantees pixel data is ready; iOS Safari can otherwise draw an empty image.
+  await image.decode();
+  if (!image.naturalWidth || !image.naturalHeight) throw new Error("Story image could not be loaded.");
+  return image;
+}
+
+// A canvas that only holds the template has a near-uniform photo area; sample it to catch that.
+function photoAreaHasContent(ctx: CanvasRenderingContext2D) {
+  const { data } = ctx.getImageData(240, 520, 600, 800);
+  let min = 255;
+  let max = 0;
+  for (let i = 0; i < data.length; i += 4 * 97) {
+    const luma = (data[i] + data[i + 1] + data[i + 2]) / 3;
+    if (luma < min) min = luma;
+    if (luma > max) max = luma;
+  }
+  return max - min > 24;
 }
 
 function spaced(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, spacing: number) {
@@ -31,9 +44,14 @@ export async function createStoryFile(previewSrc: string): Promise<File> {
   const h = image.naturalHeight * scale;
   const focusY = 0.34;
   ctx.imageSmoothingQuality = "high";
-  ctx.filter = "saturate(1.06)";
-  ctx.drawImage(image, (WIDTH - w) / 2, -(h - HEIGHT) * focusY, w, h);
-  ctx.filter = "none";
+  ctx.fillStyle = "#e9d6cf";
+  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  const drawPhoto = () => ctx.drawImage(image, (WIDTH - w) / 2, -(h - HEIGHT) * focusY, w, h);
+  drawPhoto();
+  if (!photoAreaHasContent(ctx)) {
+    drawPhoto();
+    if (!photoAreaHasContent(ctx)) throw new Error("The Lumora image could not be drawn into the Story.");
+  }
 
   const gradient = ctx.createLinearGradient(0, 0, 0, HEIGHT);
   gradient.addColorStop(0, "rgba(35,20,20,.24)");
