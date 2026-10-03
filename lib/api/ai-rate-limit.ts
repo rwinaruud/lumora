@@ -3,15 +3,16 @@ import { checkRateLimit } from "@vercel/firewall";
 type AiOperation = "image-generation" | "look-analysis";
 
 const windowMs = 10 * 60 * 1000;
+const sharedRateLimitId = "lumora-ai";
 const policies: Record<AiOperation, { id: string; limit: number; message: string }> = {
   "image-generation": {
-    id: "lumora-image-generation",
+    id: sharedRateLimitId,
     limit: 3,
     message: "You've reached the limit for creating looks. Please try again in a few minutes.",
   },
   "look-analysis": {
-    id: "lumora-look-analysis",
-    limit: 10,
+    id: sharedRateLimitId,
+    limit: 3,
     message: "You've requested too many look analyses. Please try again in a few minutes.",
   },
 };
@@ -35,7 +36,7 @@ function unavailableResponse() {
 function checkDevelopmentLimit(request: Request, operation: AiOperation): Response | null {
   const policy = policies[operation];
   const clientIp = request.headers.get("x-real-ip") ?? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
-  const key = `${operation}:${clientIp}`;
+  const key = `${policy.id}:${clientIp}`;
   const now = Date.now();
   const current = developmentBuckets.get(key);
 

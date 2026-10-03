@@ -1,14 +1,13 @@
 
 ### AI endpoint protection
 
-The OpenAI routes use Vercel's first-party `@vercel/firewall` rate-limit SDK in deployed Vercel environments. Before enabling the public endpoints, create and publish a Firewall rate-limit rule for each ID below. Set the rule condition to `@vercel/firewall`, use the matching **Rate Limit ID**, choose **IP** as the key, and configure a **10-minute fixed window**:
+The OpenAI routes use Vercel's first-party `@vercel/firewall` rate-limit SDK in deployed Vercel environments. Before enabling the public endpoints, create and publish one Firewall rate-limit rule with ID `lumora-ai`. Set the rule condition to `@vercel/firewall`, use `lumora-ai` as the **Rate Limit ID**, choose **IP** as the key, and configure a **10-minute fixed window**:
 
-| Rate limit ID | Limit |
+| Rate limit ID | Shared limit |
 | --- | ---: |
-| `lumora-image-generation` | 3 requests |
-| `lumora-look-analysis` | 10 requests |
+| `lumora-ai` | 3 requests per 10 minutes |
 
-The rate-limit ID must exactly match the value above. Requests fail closed with a structured 503 until the matching rule is configured. Vercel Firewall rate-limit usage is subject to the project's plan and pricing; counters are regional. Local development uses an in-memory per-IP limit and does not replace the production Firewall rules.
+The rate-limit ID must exactly match the value above. Generation and analysis consume the same per-IP bucket. Requests fail closed with a structured 503 until the matching rule is configured. Vercel Firewall rate-limit usage is subject to the project's plan and pricing; counters are regional. Local development uses the same shared per-IP threshold in memory and does not replace the production Firewall rule.
 
 Request bodies are streamed with byte caps (11 MB for image generation and 16 MB for analysis). Each base64 image data URL is limited to 5 MB and its decoded bytes must match its declared JPEG, PNG, WebP, or GIF signature.
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
