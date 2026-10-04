@@ -108,14 +108,14 @@ function Progress({ current }: { current: number }) {
   const labels = ["YOUR FACE", "FIND YOUR LOOK", "YOUR LUMORA"];
   return <div className="progress" aria-label={`Step ${current} of 3: ${labels[current - 1]}`}>{labels.map((label, index) => {
     const step = index + 1;
-    return <div className={`progress-step ${step === current ? "is-current" : ""} ${step < current ? "is-complete" : ""}`} key={label}><span>{String(step).padStart(2, "0")}</span><span>{label}</span></div>;
+    return <div className={`progress-step ${step === current ? "is-current" : ""} ${step < current ? "is-complete" : ""}`} key={label}><span>{String(step).padStart(2, "0")}</span><span className="visually-hidden">{label}</span></div>;
   })}</div>;
 }
 
 function UploadField({ image, onChange, title, compact = false }: { image: LocalImage | null; onChange: (event: ChangeEvent<HTMLInputElement>) => void; title: string; compact?: boolean }) {
   return <label className={`upload-field ${compact ? "upload-field-compact" : ""} ${image ? "has-upload" : ""}`}>
     <input className="visually-hidden" type="file" accept="image/*" onChange={onChange} aria-label={image ? `Replace ${title.toLowerCase()}` : title} />
-    {image ? <><span className="upload-image"><Photo src={image.src} alt={`Selected ${title.toLowerCase()}`} /></span><span className="replace-copy"><span className="upload-symbol"><Icon name="refresh" /></span> Replace {title.toLowerCase()}</span></> : <span className="upload-empty"><span className="upload-symbol"><Icon name="plus" /></span><span>{title}</span>{!compact && <small>Choose a photo from your library</small>}</span>}
+    {image ? <><span className="upload-image"><Photo src={image.src} alt={`Selected ${title.toLowerCase()}`} /></span><span className="replace-copy"><span className="upload-symbol"><Icon name="refresh" /></span> Replace {title.toLowerCase()}</span></> : <span className="upload-empty"><span className="upload-symbol"><Icon name="plus" /></span><span>{title}</span></span>}
   </label>;
 }
 
@@ -413,52 +413,62 @@ export default function LumoraExperience() {
   return <main className="site-shell">
     <header className="site-header">
       {screen !== "landing" && <button className="back-button" type="button" onClick={goBack} aria-label="Go back"><Icon name="arrow-left" /><span>Back</span></button>}
-      <Brand onClick={() => setScreen("landing")} /><span className="header-note">BEAUTY, MADE PERSONAL</span>
+      <Brand onClick={() => setScreen("landing")} />
     </header>
 
     {screen === "landing" && <section className="landing-page">
-      <div className="landing-copy"><span className="eyebrow"><span className="eyebrow-dot" /> YOUR BEAUTY, YOUR WAY</span><h1>See the look.<br /><em>On you.</em></h1>
+      <div className="landing-art" aria-label="Editorial makeup portrait collage">
+        <i className="smear smear-pink" aria-hidden="true" /><i className="smear smear-coral" aria-hidden="true" />
+        <div className="collage-main torn-bottom"><Photo src={heroPortrait} alt="Editorial beauty portrait with soft glowing makeup" priority /></div>
+        <div className="collage-tilt collage-tilt-a tilt" aria-hidden="true"><Photo src="/look-glow.jpg" alt="" /></div>
+        <div className="collage-tilt collage-tilt-b tilt" aria-hidden="true"><Photo src="/look-bold.jpg" alt="" /></div>
+        <i className="sparkle sparkle-lg" aria-hidden="true" /><i className="powder" aria-hidden="true" />
+      </div>
+      <div className="landing-copy"><h1>See the look.<br /><em>On you.</em></h1>
         <p className="landing-intro">Upload a selfie and the makeup inspiration you love. Lumora brings them together while keeping you, you.</p>
         <button className="button button-primary landing-cta" type="button" onClick={() => setScreen("face")}>Create my look <Icon name="arrow-right" /></button>
         <p className="price-note">Free to try <span>·</span> HD download €1.95 <span>·</span> No subscription</p></div>
-      <div className="landing-art" aria-label="Editorial makeup portrait"><div className="hero-photo"><Photo src={heroPortrait} alt="Editorial beauty portrait with soft glowing makeup" priority /></div>
-        <div className="hero-caption"><span>THE LUMORA EDIT</span><strong>A little more you.</strong></div><div className="hero-sticker"><Icon name="sparkle" /><small>KEEP YOU,<br />YOU</small></div>
-        <div className="hero-swatch" aria-hidden="true"><i /><i /><i /><i /></div></div>
       <div className="landing-foot"><span>Private by default</span><span>No account needed</span><span>No beauty scores, ever</span></div>
     </section>}
 
-    {screen === "face" && <section className="flow-page"><Progress current={1} /><div className="flow-heading"><span className="eyebrow">01 — YOUR FACE</span><h1>Start with you.</h1><p>Upload a clear photo of yourself.<br className="desktop-break" /> Phone photos are perfect.</p></div>
+    {screen === "face" && <section className="flow-page"><Progress current={1} /><div className="flow-hero"><i className="smear smear-pink" aria-hidden="true" /><i className="smear smear-lilac" aria-hidden="true" /><div className="flow-hero-photo tilt"><Photo src="/look-soft-glam.jpg" alt="" /></div><i className="sparkle" aria-hidden="true" /><div className="flow-heading"><h1>Start with <em>you.</em></h1><p>Upload a clear photo of yourself.</p></div></div>
       <UploadField image={originalImage} onChange={selectFace} title="Upload your photo" /><p className="privacy-note"><Icon name="heart" /> Your photo is only used to create your look.</p>
       <div className="flow-footer"><button className="button button-primary" type="button" disabled={!originalImage} onClick={() => setScreen("inspiration")}>Continue <Icon name="arrow-right" /></button></div></section>}
 
-    {screen === "inspiration" && <section className="flow-page inspiration-page"><Progress current={2} /><div className="flow-heading"><span className="eyebrow">02 — FIND YOUR LOOK</span><h1>Find your look.</h1><p>Upload a makeup inspiration you love.</p></div>
+    {screen === "inspiration" && <section className="flow-page inspiration-page"><Progress current={2} /><div className="flow-hero"><i className="smear smear-pink" aria-hidden="true" /><i className="smear smear-lilac" aria-hidden="true" /><div className="flow-hero-photo tilt"><Photo src="/look-bold.jpg" alt="" /></div><i className="sparkle" aria-hidden="true" /><div className="flow-heading"><h1>Find your <em>look.</em></h1></div></div>
       <UploadField image={inspirationPhoto} onChange={selectInspiration} title="Upload inspiration" compact /><div className="or-divider"><span />or choose a look<span /></div>
       <div className="look-grid">{curatedLooks.map((look) => <LookCard key={look.id} look={look} selected={selectedLook?.id === look.id} onSelect={() => { setSelectedLook(look); setInspirationPhoto(null); }} />)}</div>
-      <p className="inspiration-note">You can also use a photo of anyone whose makeup inspires you.</p><div className="flow-footer"><button className="button button-primary" type="button" disabled={!chosenInspiration} onClick={() => setScreen("confirmation")}>Continue <Icon name="arrow-right" /></button></div></section>}
+      <div className="flow-footer"><button className="button button-primary" type="button" disabled={!chosenInspiration} onClick={() => setScreen("confirmation")}>Continue <Icon name="arrow-right" /></button></div></section>}
 
-    {screen === "confirmation" && originalImage && chosenInspiration && <section className="flow-page confirmation-page"><Progress current={3} /><div className="flow-heading"><span className="eyebrow">03 — YOUR LUMORA</span><h1>Ready to see your look?</h1><p>A little inspiration, a lot of you.</p></div>
-      <div className="confirmation-images"><figure><div className="confirmation-photo"><Photo src={originalImage.src} alt="Your uploaded photo" /></div><figcaption>YOUR PHOTO</figcaption></figure><span className="plus-join" aria-hidden="true"><Icon name="plus" /></span><figure><div className="confirmation-photo"><Photo src={chosenInspiration.src} alt={chosenInspiration.alt} /></div><figcaption>YOUR INSPIRATION</figcaption></figure></div>
-      <p className="confirmation-copy">Lumora recreates the makeup look on you while keeping you, you.</p><button className="button button-primary create-button" type="button" onClick={() => { clearStoredJobId(); jobIdRef.current = null; setGenerationLine(0); setGeneratedImage(null); setResultId(null); setGenerationError(null); setNeedsNewPhoto(false); setLookAnalysis(null); setLookAnalysisError(null); setGenerationAttempt((attempt) => attempt + 1); setScreen("generating"); }}>Create my Lumora <Icon name="arrow-right" /></button>
-      <p className="price-note">Free preview <span>·</span> No subscription</p><p className="fine-print">High-resolution download €1.95.</p></section>}
+    {screen === "confirmation" && originalImage && chosenInspiration && <section className="flow-page confirmation-page"><Progress current={3} /><div className="flow-heading"><h1>Ready to see <em>your look?</em></h1></div>
+      <div className="confirmation-images"><i className="smear smear-pink" aria-hidden="true" /><i className="smear smear-coral" aria-hidden="true" /><i className="sparkle" aria-hidden="true" /><figure><div className="confirmation-photo"><Photo src={originalImage.src} alt="Your uploaded photo" /></div></figure><figure><div className="confirmation-photo"><Photo src={chosenInspiration.src} alt={chosenInspiration.alt} /></div></figure></div>
+      <button className="button button-primary create-button" type="button" onClick={() => { clearStoredJobId(); jobIdRef.current = null; setGenerationLine(0); setGeneratedImage(null); setResultId(null); setGenerationError(null); setNeedsNewPhoto(false); setLookAnalysis(null); setLookAnalysisError(null); setGenerationAttempt((attempt) => attempt + 1); setScreen("generating"); }}>Create my Lumora <Icon name="arrow-right" /></button>
+      </section>}
 
-    {screen === "generating" && <section className="generation-page" aria-live="polite" aria-atomic="true"><div className="generation-art"><div className="generation-halo" /><div className="generation-photo"><Photo src={originalImage?.src ?? heroPortrait} alt="Your portrait being prepared" /></div><span className="generation-orbit orbit-one" /><span className="generation-orbit orbit-two" /><span className="generation-spark spark-one"><Icon name="sparkle" /></span><span className="generation-spark spark-two"><Icon name="sparkle" /></span></div><span className="eyebrow">A MOMENT, JUST FOR YOU</span><h1>{generationLines[generationLine]}</h1>{generationError ? <div className="generation-error" role="alert"><p>{generationError}</p>{needsNewPhoto ? <button className="button button-outline" type="button" onClick={() => { clearStoredJobId(); jobIdRef.current = null; setGenerationError(null); setNeedsNewPhoto(false); setOriginalImage(null); setScreen("face"); }}>Choose another photo <Icon name="arrow-right" /></button> : <button className="button button-outline" type="button" onClick={() => { setGenerationError(null); setGenerationAttempt((attempt) => attempt + 1); }}>Try again <Icon name="arrow-right" /></button>}</div> : <p>Keep you, you.</p>}</section>}
+    {screen === "generating" && <section className="generation-page" aria-live="polite" aria-atomic="true"><div className="generation-art"><i className="smear smear-pink" aria-hidden="true" /><i className="smear smear-lilac" aria-hidden="true" /><i className="smear smear-coral" aria-hidden="true" /><div className="generation-photo tilt"><Photo src={originalImage?.src ?? heroPortrait} alt="Your portrait being prepared" /></div><i className="sparkle spark-one" aria-hidden="true" /><i className="sparkle spark-two" aria-hidden="true" /></div><h1>{generationLines[generationLine]}</h1>{generationError ? <div className="generation-error" role="alert"><p>{generationError}</p>{needsNewPhoto ? <button className="button button-secondary" type="button" onClick={() => { clearStoredJobId(); jobIdRef.current = null; setGenerationError(null); setNeedsNewPhoto(false); setOriginalImage(null); setScreen("face"); }}>Choose another photo <Icon name="arrow-right" /></button> : <button className="button button-secondary" type="button" onClick={() => { setGenerationError(null); setGenerationAttempt((attempt) => attempt + 1); }}>Try again <Icon name="arrow-right" /></button>}</div> : <><div className="progress-bar" aria-hidden="true"><span style={{ width: `${((generationLine + 1) / generationLines.length) * 100}%` }} /></div></>}</section>}
 
-    {screen === "result" && <section className="result-page"><div className="result-heading"><span className="eyebrow">MADE WITH LUMORA</span><h1>Your Lumora</h1><p>The look you loved. Now on you.</p></div>
-      <div className="result-visual"><div className={`result-photo ${comparison === "before" ? "is-before" : "is-after"}`}><Photo src={comparison === "before" ? originalImage?.src ?? heroPortrait : generatedImage ?? heroPortrait} alt={comparison === "before" ? "Your original photo" : "Your Lumora makeup look"} priority /></div><div className="result-brand-mark">LUMORA <span>BEAUTY</span></div>
+    {screen === "result" && <section className="result-page">
+      <div className="result-visual"><i className="smear smear-pink" aria-hidden="true" /><i className="smear smear-lilac" aria-hidden="true" /><i className="smear smear-coral" aria-hidden="true" />
+        <div className={`result-photo torn-bottom ${comparison === "before" ? "is-before" : "is-after"}`}><Photo src={comparison === "before" ? originalImage?.src ?? heroPortrait : generatedImage ?? heroPortrait} alt={comparison === "before" ? "Your original photo" : "Your Lumora makeup look"} priority /></div><div className="result-brand-mark">LUMORA <span>BEAUTY</span></div><i className="sparkle sparkle-lg" aria-hidden="true" />
         <div className="comparison-toggle" role="group" aria-label="Compare your photo and Lumora preview"><button type="button" className={comparison === "before" ? "active" : ""} aria-pressed={comparison === "before"} onClick={() => setComparison("before")}>Before</button><button type="button" className={comparison === "after" ? "active" : ""} aria-pressed={comparison === "after"} onClick={() => setComparison("after")}>After</button></div></div>
+      <div className="result-heading"><h1>Your <em>Lumora</em></h1></div>
       <div className="result-actions">
-        <article className="result-action"><span className="action-icon"><Icon name="share" /></span><div><h2>Share your look <span className="action-free">Free</span></h2><p>Show your Lumora on Instagram, TikTok or Stories.</p></div><button className="button button-primary" type="button" onClick={() => void shareLook("result")}>Share <Icon name="arrow-right" /></button></article>
-        {SHOW_GET_THIS_LOOK && <article className="result-action"><span className="action-icon"><Icon name="sparkle" /></span><div><h2>Love the look?</h2><p>Recreate it in real life.</p></div><button className="button button-secondary" type="button" onClick={() => { setFeedback(""); trackEvent("get_this_look_clicked", { has_analysis: !!lookAnalysis }); setScreen("shop"); }}>Get this look <Icon name="arrow-right" /></button></article>}
-        <article className="result-action"><span className="action-icon"><Icon name="sparkle" /></span><div><h2>Makeup tutorial</h2><p>Personalised step-by-step for your look · Free</p></div>{resultId && tutorialReadyFor === resultId
-          ? <a className="button button-secondary" href={`/tutorial/${encodeURIComponent(resultId)}`} target="_blank" rel="noopener">View my makeup tutorial <Icon name="arrow-right" /></a>
-          : <button className="button button-secondary" type="button" disabled={!resultId || tutorialLoading} onClick={() => { void createTutorial(); }}>{tutorialLoading ? "Creating your tutorial…" : "Create my makeup tutorial"} <Icon name="arrow-right" /></button>}</article>
-        <article className="result-action"><span className="action-icon"><Icon name="download" /></span><div><h2>Download HD <span className="action-meta">€1.95</span></h2><p>High-resolution · No Lumora branding.</p></div><button className="button button-secondary" type="button" disabled={!resultId || checkoutLoading} onClick={() => { void beginCheckout(); }}>{checkoutLoading ? "Opening Checkout…" : "Download HD · €1.95"} <Icon name="arrow-right" /></button></article></div>
+        {resultId && tutorialReadyFor === resultId
+          ? <a className="button button-primary" href={`/tutorial/${encodeURIComponent(resultId)}`} target="_blank" rel="noopener">View my makeup tutorial <Icon name="arrow-right" /></a>
+          : <button className="button button-primary" type="button" disabled={!resultId || tutorialLoading} onClick={() => { void createTutorial(); }}>{tutorialLoading ? "Creating your tutorial…" : "Create my makeup tutorial"} <Icon name="arrow-right" /></button>}
+        
+        <div className="result-secondary">
+          <button className="button button-secondary" type="button" disabled={!resultId || checkoutLoading} onClick={() => { void beginCheckout(); }}><Icon name="download" />{checkoutLoading ? "Opening Checkout…" : <>Download HD <span className="action-meta">€1.95</span></>}</button>
+          <button className="button button-secondary" type="button" onClick={() => void shareLook("result")}><Icon name="share" />Share</button>
+          {SHOW_GET_THIS_LOOK && <button className="button button-secondary" type="button" onClick={() => { setFeedback(""); trackEvent("get_this_look_clicked", { has_analysis: !!lookAnalysis }); setScreen("shop"); }}>Get this look <Icon name="arrow-right" /></button>}
+        </div>
+        </div>
       {process.env.NODE_ENV !== "production" && <details className="look-analysis-inspector"><summary>Development · Look analysis</summary>{lookAnalysisError ? <p role="status">{lookAnalysisError}</p> : lookAnalysis ? <pre>{JSON.stringify(lookAnalysis, null, 2)}</pre> : <p>Analysis is being prepared.</p>}</details>}
       {feedback && <p className="feedback" role="status">{feedback}</p>}</section>}
 
-    {screen === "share" && <section className="share-page"><div className="flow-heading"><h1>Your Story is ready.</h1></div>
+    {screen === "share" && <section className="share-page"><div className="flow-heading"><h1>Your Story is <em>ready.</em></h1></div>
       <div className="story-preview"><Photo src={resultImage} alt="Your Lumora in a social Story preview" /><div className="story-top"><span>LUMORA</span><small>BEAUTY, MADE PERSONAL</small></div><div className="story-bottom"><span>Made with Lumora</span><strong>See the look.<br /><em>On you.</em></strong><small>lumorabeauty.ai</small></div></div>
-      <div className="share-actions"><button className="button button-primary" type="button" onClick={() => void shareLook()}>Share <Icon name="share" /></button><button className="button button-outline" type="button" onClick={saveStory}>Save Story <Icon name="download" /></button></div><p className="privacy-note">Nothing is posted without your permission.</p>{feedback && <p className="feedback" role="status">{feedback}</p>}</section>}
+      <div className="share-actions"><button className="button button-primary" type="button" onClick={() => void shareLook()}>Share <Icon name="share" /></button><button className="button button-secondary" type="button" onClick={saveStory}>Save Story <Icon name="download" /></button></div><p className="privacy-note">Nothing is posted without your permission.</p>{feedback && <p className="feedback" role="status">{feedback}</p>}</section>}
 
     {screen === "shop" && <section className="shop-page"><div className="shop-heading"><div className="flow-heading"><span className="eyebrow">A FEW GOOD THINGS</span><h1>Get this look</h1><p>Everything you need to recreate your Lumora.</p></div>
       <label className="region-select">SHOPPING FOR <span aria-hidden="true">·</span><select value={region} onChange={(event) => setRegion(event.target.value)} aria-label="Shopping region"><option>Netherlands</option><option>Belgium</option><option>Germany</option><option>France</option></select></label></div>

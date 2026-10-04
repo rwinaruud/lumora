@@ -8,7 +8,6 @@ export function InfoShell({ children }: { children: ReactNode }) {
     <header className="site-header">
       <BackButton />
       <Link className="brand" href="/" aria-label="Lumora Beauty home"><span>LUMORA</span><small>BEAUTY</small></Link>
-      <span className="header-note">BEAUTY, MADE PERSONAL</span>
     </header>
     <article className="info-page">{children}</article>
     <SiteFooter />

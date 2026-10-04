@@ -34,12 +34,11 @@ export default async function TutorialPage({ params }: PageProps<"/tutorial/[res
     <TutorialViewTracker viewKey={resultId} stepCount={tutorial.steps.length} difficulty={tutorial.difficulty} />
     <header className="site-header">
       <Link className="brand" href="/" aria-label="Lumora Beauty home"><span>LUMORA</span><small>BEAUTY</small></Link>
-      <span className="header-note">BEAUTY, MADE PERSONAL</span>
     </header>
     <article className="tutorial-page">
       <div className="flow-heading"><span className="eyebrow">YOUR MAKEUP TUTORIAL</span><h1>{tutorial.title}</h1><p>{tutorial.summary}</p></div>
-      <div className="tutorial-hero">
-        <Image src={`/api/share-preview/${resultId}`} alt="Your Lumora makeup look" fill unoptimized preload sizes="(max-width: 700px) 80vw, 320px" />
+      <div className="tutorial-hero"><i className="smear smear-pink" aria-hidden="true" /><i className="smear smear-lilac" aria-hidden="true" /><i className="sparkle" aria-hidden="true" />
+        <div className="tutorial-hero-photo tilt"><Image src={`/api/share-preview/${resultId}`} alt="Your Lumora makeup look" fill unoptimized preload sizes="(max-width: 700px) 80vw, 320px" /></div>
       </div>
       <dl className="tutorial-meta">
         <div><dt>Time</dt><dd>~{tutorial.estimatedMinutes} min</dd></div>

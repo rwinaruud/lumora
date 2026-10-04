@@ -47,10 +47,9 @@ export default async function SharedLumoraPage({ params }: SharePageProps) {
   return <main className="site-shell">
     <header className="site-header">
       <Link className="brand" href="/" aria-label="Lumora Beauty home"><span>LUMORA</span><small>BEAUTY</small></Link>
-      <span className="header-note">BEAUTY, MADE PERSONAL</span>
     </header>
     <section className="share-page">
-      <div className="flow-heading"><span className="eyebrow">MADE WITH LUMORA</span><h1>Your Lumora</h1><p>See the look. On you.</p></div>
+      <div className="flow-heading"><span className="eyebrow">MADE WITH LUMORA</span><h1>Your <em>Lumora</em></h1><p>See the look. On you.</p></div>
       <div className="story-preview">
         <Image src={`/api/share-preview/${resultId}`} alt="A shared Lumora makeup preview" fill unoptimized preload sizes="(max-width: 700px) 70vw, 290px" />
         <div className="story-top"><span>LUMORA</span><small>BEAUTY, MADE PERSONAL</small></div>

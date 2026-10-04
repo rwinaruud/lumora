@@ -22,13 +22,14 @@ export default async function DownloadPage({ searchParams }: PageProps<"/downloa
   return <main className="site-shell">
     {paymentVerified && <PurchaseTracker transactionId={sessionId} />}
     <header className="site-header"><Link className="brand" href="/" aria-label="Lumora Beauty home"><span>LUMORA</span><small>BEAUTY</small></Link></header>
-    <section className="flow-page">
-      <div className="flow-heading"><span className="eyebrow">YOUR LUMORA</span><h1>Your HD download</h1><p>Payment is verified securely before your original image is sent.</p></div>
+    <section className="flow-page confirm-page">
+      <div className="confirm-art" aria-hidden="true"><i className="smear smear-pink" /><i className="smear smear-lilac" /><i className="smear smear-coral" /><i className="sparkle" /></div>
+      <div className="flow-heading"><span className="eyebrow">YOUR LUMORA</span><h1>Your <em>HD download</em></h1><p>Payment is verified securely before your original image is sent.</p></div>
       <div className="flow-footer">
         {validSessionId
           ? <a className="button button-primary" href={`/api/hd-download?session_id=${encodeURIComponent(sessionId)}`}>Download HD <span aria-hidden="true">→</span></a>
           : <p role="alert">This download link is invalid. Return to Lumora to create a new look.</p>}
-        <Link className="button button-outline" href="/">Back to Lumora</Link>
+        <Link className="button button-secondary" href="/">Back to Lumora</Link>
       </div>
     </section>
     <SiteFooter />
