@@ -165,6 +165,8 @@ export default function LumoraExperience() {
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [resultId, setResultId] = useState<string | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [tutorialReadyFor, setTutorialReadyFor] = useState<string | null>(null);
+  const [tutorialLoading, setTutorialLoading] = useState(false);
   const [generationLine, setGenerationLine] = useState(0);
   const [generationAttempt, setGenerationAttempt] = useState(0);
   const [generationError, setGenerationError] = useState<string | null>(null);
@@ -260,7 +262,7 @@ export default function LumoraExperience() {
           const analysisResponse = await fetch("/api/look-analysis", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(analysisInput),
+            body: JSON.stringify({ ...analysisInput, resultId: generationPayload.resultId }),
           });
           const analysisPayload = await analysisResponse.json() as LookAnalysis | { error?: string | { code?: string; message?: string; retryAfterSeconds?: number } };
           if (!analysisResponse.ok || !("categories" in analysisPayload)) {
@@ -361,6 +363,27 @@ export default function LumoraExperience() {
       setFeedback("Story saved.");
     } catch { setFeedback("Your Story could not be saved. Please try again."); }
   }
+  async function createTutorial() {
+    if (!resultId || tutorialLoading) return;
+    setTutorialLoading(true);
+    setFeedback("");
+    trackEvent("tutorial_started");
+    try {
+      const response = await fetch("/api/look-tutorial", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resultId }),
+      });
+      const payload = await response.json() as { status?: string; stepCount?: number; difficulty?: string; error?: unknown };
+      if (!response.ok || payload.status !== "completed") throw new Error(apiErrorMessage(payload, "Your makeup tutorial couldn't be created. Please try again."));
+      trackEventOnce(`tutorial_completed:${resultId}`, "tutorial_completed", { step_count: payload.stepCount ?? 0, difficulty: payload.difficulty ?? "unknown" });
+      setTutorialReadyFor(resultId);
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Your makeup tutorial couldn't be created. Please try again.");
+    } finally {
+      setTutorialLoading(false);
+    }
+  }
   async function beginCheckout() {
     if (!resultId || checkoutLoading) return;
     setCheckoutLoading(true);
@@ -425,6 +448,9 @@ export default function LumoraExperience() {
       <div className="result-actions">
         <article className="result-action"><span className="action-icon"><Icon name="share" /></span><div><h2>Share your look <span className="action-free">Free</span></h2><p>Show your Lumora on Instagram, TikTok or Stories.</p></div><button className="button button-primary" type="button" onClick={() => void shareLook("result")}>Share <Icon name="arrow-right" /></button></article>
         <article className="result-action"><span className="action-icon"><Icon name="sparkle" /></span><div><h2>Love the look?</h2><p>Recreate it in real life.</p></div><button className="button button-secondary" type="button" onClick={() => { setFeedback(""); trackEvent("get_this_look_clicked", { has_analysis: !!lookAnalysis }); setScreen("shop"); }}>Get this look <Icon name="arrow-right" /></button></article>
+        <article className="result-action"><span className="action-icon"><Icon name="sparkle" /></span><div><h2>Makeup tutorial</h2><p>Personalised step-by-step for your look · Free</p></div>{resultId && tutorialReadyFor === resultId
+          ? <a className="button button-secondary" href={`/tutorial/${encodeURIComponent(resultId)}`} target="_blank" rel="noopener">View my makeup tutorial <Icon name="arrow-right" /></a>
+          : <button className="button button-secondary" type="button" disabled={!resultId || tutorialLoading} onClick={() => { void createTutorial(); }}>{tutorialLoading ? "Creating your tutorial…" : "Create my makeup tutorial"} <Icon name="arrow-right" /></button>}</article>
         <article className="result-action"><span className="action-icon"><Icon name="download" /></span><div><h2>Download HD <span className="action-meta">€1.95</span></h2><p>High-resolution · No Lumora branding.</p></div><button className="button button-secondary" type="button" disabled={!resultId || checkoutLoading} onClick={() => { void beginCheckout(); }}>{checkoutLoading ? "Opening Checkout…" : "Download HD · €1.95"} <Icon name="arrow-right" /></button></article></div>
       {process.env.NODE_ENV !== "production" && <details className="look-analysis-inspector"><summary>Development · Look analysis</summary>{lookAnalysisError ? <p role="status">{lookAnalysisError}</p> : lookAnalysis ? <pre>{JSON.stringify(lookAnalysis, null, 2)}</pre> : <p>Analysis is being prepared.</p>}</details>}
       {feedback && <p className="feedback" role="status">{feedback}</p>}</section>}

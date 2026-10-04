@@ -8,7 +8,7 @@ export function GoogleAnalytics() {
   // Page views are sent manually with a sanitized page_location (origin + pathname only).
   return <>
     <Script src={`https://www.googletagmanager.com/gtag/js?id=${measurementId}`} strategy="afterInteractive" />
-    <Script id="ga4-init" strategy="afterInteractive">{`window.dataLayer=window.dataLayer||[];window.gtag=function(){window.dataLayer.push(arguments);};window.gtag('js',new Date());window.gtag('config','${measurementId}',{send_page_view:false});var l=window.location,r='';try{r=document.referrer?new URL(document.referrer).origin+'/':'';}catch(e){}window.gtag('event','page_view',{page_location:l.origin+l.pathname,page_path:l.pathname,page_referrer:r});`}</Script>
+    <Script id="ga4-init" strategy="afterInteractive">{`window.dataLayer=window.dataLayer||[];window.gtag=function(){window.dataLayer.push(arguments);};var l=window.location,p=l.pathname.replace(/^\\/tutorial\\/[^\\/]+/,'/tutorial/:id').replace(/^\\/share\\/[^\\/]+/,'/share/:id'),r='';window.gtag('js',new Date());window.gtag('set',{page_location:l.origin+p,page_path:p});window.gtag('config','${measurementId}',{send_page_view:false});try{r=document.referrer?new URL(document.referrer).origin+'/':'';}catch(e){}window.gtag('event','page_view',{page_location:l.origin+p,page_path:p,page_referrer:r});`}</Script>
     <GoogleAnalyticsPageViews />
   </>;
 }

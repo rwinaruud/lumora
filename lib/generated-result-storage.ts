@@ -3,6 +3,8 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import sharp from "sharp";
+import type { LookAnalysis } from "@/lib/look-analysis";
+import type { MakeupTutorial } from "@/lib/look-tutorial/types";
 
 const resultIdPattern = /^[A-Za-z0-9_-]{43}$/;
 const generatedJpegPattern = /^data:image\/jpeg;base64,([A-Za-z0-9+/]+={0,2})$/;
@@ -149,3 +151,40 @@ export async function previewForResult(resultId: string): Promise<string> {
   const original = Buffer.from(await (await readPrivateResult(resultId)).arrayBuffer());
   return `data:image/jpeg;base64,${(await createFreePreview(original)).toString("base64")}`;
 }
+
+function isMissingObject(error: { message: string }): boolean {
+  const status = (error as { status?: number; statusCode?: string | number }).status ?? Number((error as { statusCode?: string | number }).statusCode);
+  const original = (error as { originalError?: { status?: number } }).originalError?.status;
+  return status === 400 || status === 404 || original === 400 || original === 404 || /not found/i.test(error.message);
+}
+
+function derivedPath(folder: "analyses" | "tutorials", resultId: string): string {
+  if (!resultIdPattern.test(resultId)) throw new Error("The Lumora result ID is invalid.");
+  return `${folder}/${resultId}.json`;
+}
+
+async function readDerivedJson<T>(folder: "analyses" | "tutorials", resultId: string): Promise<T | null> {
+  const { data, error } = await getPrivateBucket().download(derivedPath(folder, resultId));
+  if (error) {
+    if (isMissingObject(error)) return null;
+    throw new Error("The stored Lumora data could not be read.", { cause: error });
+  }
+  return JSON.parse(await data.text()) as T;
+}
+
+// First writer wins; returns false when the object already exists.
+async function createDerivedJson(folder: "analyses" | "tutorials", resultId: string, value: unknown): Promise<boolean> {
+  const { error } = await getPrivateBucket().upload(derivedPath(folder, resultId), Buffer.from(JSON.stringify(value)), {
+    contentType: "application/json",
+    cacheControl: "0",
+    upsert: false,
+  });
+  if (!error) return true;
+  if (/already exists|duplicate/i.test(error.message) || (error as { statusCode?: string }).statusCode === "409") return false;
+  throw new Error("The stored Lumora data could not be saved.", { cause: error });
+}
+
+export const readLookAnalysis = (resultId: string) => readDerivedJson<LookAnalysis>("analyses", resultId);
+export const storeLookAnalysis = (resultId: string, analysis: LookAnalysis) => createDerivedJson("analyses", resultId, analysis);
+export const readMakeupTutorial = (resultId: string) => readDerivedJson<MakeupTutorial>("tutorials", resultId);
+export const storeMakeupTutorial = (resultId: string, tutorial: MakeupTutorial) => createDerivedJson("tutorials", resultId, tutorial);
