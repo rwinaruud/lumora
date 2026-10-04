@@ -1,6 +1,6 @@
 import "server-only";
 
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { PDFDocument, StandardFonts, degrees, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import type { MakeupTutorial } from "./types";
 
 const PAGE = { width: 595.28, height: 841.89 };
@@ -12,11 +12,16 @@ const colour = (hex: string) => {
   const value = parseInt(hex.slice(1), 16);
   return rgb(((value >> 16) & 255) / 255, ((value >> 8) & 255) / 255, (value & 255) / 255);
 };
-const ink = colour("#33231f");
-const muted = colour("#84736d");
-const wine = colour("#672c3b");
-const rose = colour("#b98f88");
-const line = colour("#e8ded7");
+const ink = colour("#3b1f29");
+const muted = colour("#7d6b6b");
+const wine = colour("#642c3b");
+const pink = colour("#ff4dc4");
+const coral = colour("#ff6b4a");
+const lilac = colour("#b79cff");
+const peach = colour("#f8c6b9");
+const cream = colour("#f8f3ed");
+const card = colour("#fffaf5");
+const line = colour("#e6d9d0");
 
 // The standard PDF fonts only cover WinAnsi; anything outside it is dropped rather than failing the whole document.
 function safe(text: string): string {
@@ -51,6 +56,26 @@ function spaced(target: PDFPage, text: string, x: number, y: number, size: numbe
 
 const capitalise = (value: string) => value.replace(/\b\p{L}/gu, (letter) => letter.toUpperCase());
 
+// Rounded rectangle; x/top are PDF coordinates of the top-left corner (drawSvgPath flips the y axis).
+function roundRect(target: PDFPage, x: number, top: number, width: number, height: number, radius: number, fill?: ReturnType<typeof rgb>, border?: ReturnType<typeof rgb>, opacity = 1) {
+  const r = Math.min(radius, height / 2, width / 2);
+  const path = `M ${r} 0 H ${width - r} A ${r} ${r} 0 0 1 ${width} ${r} V ${height - r} A ${r} ${r} 0 0 1 ${width - r} ${height} H ${r} A ${r} ${r} 0 0 1 0 ${height - r} V ${r} A ${r} ${r} 0 0 1 ${r} 0 Z`;
+  target.drawSvgPath(path, { x, y: top, color: fill, borderColor: border, borderWidth: border ? 0.6 : 0, opacity, borderOpacity: 1 });
+}
+
+function sparkle(target: PDFPage, cx: number, cy: number, size: number, fill: ReturnType<typeof rgb>) {
+  const s = size;
+  const path = `M 0 ${-s} C ${s * 0.12} ${-s * 0.28} ${s * 0.28} ${-s * 0.12} ${s} 0 C ${s * 0.28} ${s * 0.12} ${s * 0.12} ${s * 0.28} 0 ${s} C ${-s * 0.12} ${s * 0.28} ${-s * 0.28} ${s * 0.12} ${-s} 0 C ${-s * 0.28} ${-s * 0.12} ${-s * 0.12} ${-s * 0.28} 0 ${-s} Z`;
+  target.drawSvgPath(path, { x: cx, y: cy, color: fill });
+}
+
+// A glossy blob: a tilted ellipse with a soft highlight.
+function blob(target: PDFPage, cx: number, cy: number, rx: number, ry: number, tilt: number, fill: ReturnType<typeof rgb>, opacity = 0.9) {
+  target.drawEllipse({ x: cx, y: cy, xScale: rx, yScale: ry, rotate: degrees(tilt), color: fill, opacity });
+  const lift = tilt * (Math.PI / 180);
+  target.drawEllipse({ x: cx - ry * 0.18 * Math.sin(lift) - rx * 0.12, y: cy + ry * 0.3, xScale: rx * 0.5, yScale: ry * 0.2, rotate: degrees(tilt), color: rgb(1, 1, 1), opacity: 0.28 });
+}
+
 export async function buildTutorialPdf(tutorial: MakeupTutorial, imageJpeg: Uint8Array): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   pdf.setTitle(`Your Lumora makeup tutorial - ${safe(tutorial.title)}`);
@@ -59,130 +84,186 @@ export async function buildTutorialPdf(tutorial: MakeupTutorial, imageJpeg: Uint
   pdf.setProducer("Lumora Beauty");
 
   const serif = await pdf.embedFont(StandardFonts.TimesRoman);
+  const serifItalic = await pdf.embedFont(StandardFonts.TimesRomanItalic);
   const sans = await pdf.embedFont(StandardFonts.Helvetica);
   const sansBold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const sansItalic = await pdf.embedFont(StandardFonts.HelveticaOblique);
   const photo = await pdf.embedJpg(imageJpeg);
 
   const pages: PDFPage[] = [];
-  let page = pdf.addPage([PAGE.width, PAGE.height]);
-  pages.push(page);
-  let y = PAGE.height - MARGIN;
-
-  const label = (target: PDFPage, text: string, x: number, atY: number, tone = wine) =>
-    spaced(target, safe(text).toUpperCase(), x, atY, 7.5, sansBold, tone, 1.6);
-
-  const newPage = () => {
-    page = pdf.addPage([PAGE.width, PAGE.height]);
-    pages.push(page);
-    y = PAGE.height - MARGIN;
+  const addPage = () => {
+    const created = pdf.addPage([PAGE.width, PAGE.height]);
+    created.drawRectangle({ x: 0, y: 0, width: PAGE.width, height: PAGE.height, color: cream });
+    pages.push(created);
+    return created;
   };
-  const ensure = (height: number) => { if (y - height < MARGIN + FOOTER_SPACE) newPage(); };
-
-  // Masthead
-  spaced(page, "LUMORA", MARGIN, y - 14, 18, serif, wine, 3);
-  spaced(page, "BEAUTY", MARGIN, y - 26, 6.5, sansBold, wine, 3.2);
-  const tag = "BEAUTY, MADE PERSONAL";
-  spaced(page, tag, PAGE.width - MARGIN - sans.widthOfTextAtSize(tag, 7) - (tag.length - 1) * 1.2, y - 14, 7, sans, muted, 1.2);
-  page.drawLine({ start: { x: MARGIN, y: y - 40 }, end: { x: PAGE.width - MARGIN, y: y - 40 }, thickness: 0.6, color: line });
-  y -= 76;
-
-  // Title block with the result image alongside the summary
-  label(page, "Your makeup tutorial", MARGIN, y, rose);
-  y -= 8;
-  const titleLines = wrap(tutorial.title, serif, 34, CONTENT_WIDTH);
-  for (const text of titleLines) { y -= 36; page.drawText(text, { x: MARGIN, y, size: 34, font: serif, color: ink }); }
-  y -= 22;
-
-  const imageWidth = 188;
-  const imageHeight = Math.min(250, imageWidth * (photo.height / photo.width));
-  const drawnWidth = imageHeight * (photo.width / photo.height);
-  page.drawImage(photo, { x: MARGIN, y: y - imageHeight, width: drawnWidth, height: imageHeight });
-
-  const columnX = MARGIN + Math.max(drawnWidth, 150) + 28;
-  const columnWidth = PAGE.width - MARGIN - columnX;
-  let columnY = y - 10;
-  for (const text of wrap(tutorial.summary, serif, 15, columnWidth)) { columnY -= 20; page.drawText(text, { x: columnX, y: columnY, size: 15, font: serif, color: ink }); }
-  columnY -= 26;
+  const label = (target: PDFPage, text: string, x: number, atY: number, tone = wine, size = 7.5) =>
+    spaced(target, safe(text).toUpperCase(), x, atY, size, sansBold, tone, 1.6);
+  const centered = (target: PDFPage, text: string, centerX: number, atY: number, size: number, font: PDFFont, tone: ReturnType<typeof rgb>) =>
+    target.drawText(text, { x: centerX - font.widthOfTextAtSize(text, size) / 2, y: atY, size, font, color: tone });
   const difficulty = { easy: "Easy", intermediate: "Intermediate", advanced: "Advanced" }[tutorial.difficulty];
-  for (const [name, value] of [["Time", `~${tutorial.estimatedMinutes} min`], ["Level", difficulty], ["Steps", String(tutorial.steps.length)]]) {
-    page.drawLine({ start: { x: columnX, y: columnY + 12 }, end: { x: columnX + columnWidth, y: columnY + 12 }, thickness: 0.5, color: line });
-    label(page, name, columnX, columnY - 3, rose);
-    page.drawText(safe(value), { x: columnX + 70, y: columnY - 5, size: 14, font: serif, color: ink });
-    columnY -= 30;
+
+  // ---------- Cover ----------
+  let page = addPage();
+  const centreX = PAGE.width / 2;
+  spaced(page, "LUMORA", MARGIN, PAGE.height - 70, 20, serif, wine, 4);
+  sparkle(page, MARGIN + 124, PAGE.height - 62, 6, pink);
+
+  const maxPhotoWidth = 282;
+  const maxPhotoHeight = 372;
+  const photoScale = Math.min(maxPhotoWidth / photo.width, maxPhotoHeight / photo.height);
+  const photoWidth = photo.width * photoScale;
+  const photoHeight = photo.height * photoScale;
+  const photoLeft = centreX - photoWidth / 2;
+  const photoTop = PAGE.height - 118;
+  const photoBottom = photoTop - photoHeight;
+  blob(page, photoLeft - 36, photoBottom + photoHeight * 0.68, 118, 78, 24, pink, 0.9);
+  blob(page, photoLeft + photoWidth + 40, photoBottom + photoHeight * 0.3, 92, 62, -28, lilac, 0.85);
+  blob(page, photoLeft + photoWidth * 0.78, photoBottom - 14, 96, 36, 8, coral, 0.85);
+  const frame = 9;
+  roundRect(page, photoLeft - frame + 4, photoTop + frame - 6, photoWidth + frame * 2, photoHeight + frame * 2, 3, wine, undefined, 0.12);
+  roundRect(page, photoLeft - frame, photoTop + frame, photoWidth + frame * 2, photoHeight + frame * 2, 3, rgb(1, 1, 1));
+  page.drawImage(photo, { x: photoLeft, y: photoBottom, width: photoWidth, height: photoHeight });
+  sparkle(page, photoLeft + photoWidth + 58, photoTop - 26, 15, pink);
+
+  let coverY = Math.min(photoBottom - 62, 330);
+  const titleSize = 38;
+  centered(page, "YOUR PERSONAL", centreX, coverY, titleSize, serif, wine);
+  coverY -= 44;
+  centered(page, "MAKEUP TUTORIAL", centreX, coverY, titleSize, serif, pink);
+  coverY -= 14;
+  for (const text of wrap(tutorial.title, serifItalic, 21, CONTENT_WIDTH - 40)) {
+    coverY -= 28;
+    centered(page, text, centreX, coverY, 21, serifItalic, wine);
   }
+  coverY -= 24;
+  centered(page, "Beauty, made personal.", centreX, coverY, 10, sansItalic, muted);
+
+  const statsY = 112;
+  const statWidth = CONTENT_WIDTH / 3;
+  page.drawLine({ start: { x: MARGIN, y: statsY + 34 }, end: { x: PAGE.width - MARGIN, y: statsY + 34 }, thickness: 0.6, color: line });
+  [["Time", `~${tutorial.estimatedMinutes} min`], ["Level", difficulty], ["Steps", String(tutorial.steps.length)]].forEach(([name, value], index) => {
+    const x = MARGIN + statWidth * index + statWidth / 2;
+    const nameWidth = sansBold.widthOfTextAtSize(name.toUpperCase(), 7.5) + (name.length - 1) * 1.6;
+    label(page, name, x - nameWidth / 2, statsY + 10, pink);
+    centered(page, value, x, statsY - 14, 19, serif, wine);
+  });
+
+  // ---------- Inner pages ----------
+  let y = 0;
+  const startPage = () => {
+    page = addPage();
+    blob(page, PAGE.width - 30, PAGE.height + 6, 62, 34, -18, lilac, 0.55);
+    spaced(page, "LUMORA", MARGIN, PAGE.height - 50, 11, serif, wine, 2.6);
+    sparkle(page, MARGIN + 74, PAGE.height - 45, 3.6, pink);
+    y = PAGE.height - 92;
+  };
+  const ensure = (height: number) => { if (y - height < MARGIN + FOOTER_SPACE) startPage(); };
+  startPage();
+
+  // Overview
+  label(page, "The look", MARGIN, y, pink);
+  y -= 10;
+  for (const text of wrap(tutorial.summary, serif, 19, CONTENT_WIDTH)) { y -= 26; page.drawText(text, { x: MARGIN, y, size: 19, font: serif, color: wine }); }
   if (tutorial.highlights.length) {
-    const text = wrap(tutorial.highlights.join(" · "), sansItalic, 9.5, columnWidth);
-    for (const row of text) { page.drawText(row, { x: columnX, y: columnY - 4, size: 9.5, font: sansItalic, color: muted }); columnY -= 14; }
+    let chipX = MARGIN;
+    y -= 30;
+    for (const text of tutorial.highlights.map((item) => safe(capitalise(item))).filter(Boolean)) {
+      const width = sans.widthOfTextAtSize(text, 8.5) + 20;
+      if (chipX + width > PAGE.width - MARGIN) { chipX = MARGIN; y -= 24; }
+      roundRect(page, chipX, y + 14, width, 20, 10, rgb(1, 1, 1), peach);
+      page.drawText(text, { x: chipX + 10, y: y + 1.5, size: 8.5, font: sans, color: wine });
+      chipX += width + 8;
+    }
+    y -= 6;
   }
-  y = Math.min(y - imageHeight, columnY) - 34;
+  y -= 38;
 
   // Palette
   if (tutorial.palette.length) {
-    ensure(110);
-    label(page, "The palette", MARGIN, y, rose);
-    y -= 14;
-    const gap = 12;
-    const perRow = Math.min(tutorial.palette.length, 5);
-    const swatchWidth = (CONTENT_WIDTH - gap * (perRow - 1)) / perRow;
-    tutorial.palette.slice(0, 5).forEach((swatch, index) => {
-      const x = MARGIN + index * (swatchWidth + gap);
-      page.drawRectangle({ x, y: y - 40, width: swatchWidth, height: 40, color: colour(swatch.colour ?? "#e3d3ca"), borderColor: line, borderWidth: 0.5 });
-      page.drawText(safe(swatch.label), { x, y: y - 56, size: 9.5, font: sansBold, color: ink });
+    ensure(120);
+    label(page, "The palette", MARGIN, y, pink);
+    y -= 16;
+    const swatches = tutorial.palette.slice(0, 5);
+    const cell = CONTENT_WIDTH / swatches.length;
+    const radius = 24;
+    swatches.forEach((swatch, index) => {
+      const cx = MARGIN + cell * index + cell / 2;
+      const cy = y - radius - 4;
+      page.drawCircle({ x: cx, y: cy, size: radius, color: colour(swatch.colour ?? "#e3d3ca"), borderColor: rgb(1, 1, 1), borderWidth: 2 });
+      page.drawCircle({ x: cx, y: cy, size: radius + 1, borderColor: line, borderWidth: 0.6 });
+      page.drawEllipse({ x: cx - 7, y: cy + 10, xScale: 9, yScale: 4.5, rotate: degrees(24), color: rgb(1, 1, 1), opacity: 0.3 });
+      centered(page, safe(swatch.label), cx, cy - radius - 16, 9.5, sansBold, ink);
       const detail = safe(capitalise([swatch.colourFamily, swatch.finish].filter(Boolean).join(" · ")));
-      page.drawText(wrap(detail, sans, 8, swatchWidth)[0] ?? "", { x, y: y - 68, size: 8, font: sans, color: muted });
+      centered(page, wrap(detail, sans, 8, cell - 6)[0] ?? "", cx, cy - radius - 28, 8, sans, muted);
     });
-    y -= 94;
+    y -= radius * 2 + 62;
   }
 
   // Steps
-  // The cover page carries the overview; the routine starts on a fresh page so no step is split from its heading.
-  newPage();
-  label(page, "Step by step", MARGIN, y, rose);
-  y -= 10;
-  const textX = MARGIN + 42;
+  ensure(140);
+  label(page, "Step by step", MARGIN, y, pink);
+  y -= 8;
+  const textX = MARGIN + 52;
   const textWidth = PAGE.width - MARGIN - textX;
+  const innerWidth = textWidth - 28;
 
   tutorial.steps.forEach((step, index) => {
+    const titleLines = wrap(step.title, serif, 20, textWidth);
     const instruction = wrap(step.instruction, sans, 10.5, textWidth);
-    const attributes = safe(capitalise([step.attributes.colour, step.attributes.finish, step.attributes.intensity].filter(Boolean).join(" · ")));
-    const needs = step.tools.length ? wrap(step.tools.map((item) => item.label).join(" · "), sans, 10, textWidth) : [];
-    const tip = step.tip ? wrap(step.tip, sansItalic, 9.5, textWidth - 14) : [];
-    const height = 34 + instruction.length * 15.5 + (attributes ? 20 : 0) + (needs.length ? 22 + needs.length * 14 : 0) + (tip.length ? 24 + tip.length * 13.5 : 0) + 22;
+    const chips = [step.attributes.colour, step.attributes.finish, step.attributes.intensity].filter((value): value is string => !!value).map((value) => safe(capitalise(value))).filter(Boolean);
+    const needs = step.tools.length ? wrap(step.tools.map((item) => item.label).join(" · "), sans, 10, innerWidth) : [];
+    const tip = step.tip ? wrap(step.tip, sansItalic, 10, innerWidth) : [];
+    const needsHeight = needs.length ? 34 + needs.length * 14 : 0;
+    const tipHeight = tip.length ? 34 + tip.length * 14 : 0;
+    const height = 18 + titleLines.length * 24 + 8 + instruction.length * 15.5 + (chips.length ? 36 : 0) + (needs.length ? 14 + needsHeight : 0) + (tip.length ? 12 + tipHeight : 0) + 30;
 
     ensure(height);
-    y -= 14;
-    page.drawLine({ start: { x: MARGIN, y }, end: { x: PAGE.width - MARGIN, y }, thickness: 0.5, color: line });
-    y -= 30;
-    page.drawText(String(index + 1).padStart(2, "0"), { x: MARGIN, y: y - 2, size: 24, font: serif, color: rose });
-    page.drawText(safe(step.title), { x: textX, y, size: 17, font: serif, color: ink });
-    y -= 10;
+    page.drawLine({ start: { x: MARGIN, y: y - 8 }, end: { x: PAGE.width - MARGIN, y: y - 8 }, thickness: 0.5, color: line });
+    y -= 18;
+    page.drawText(String(index + 1).padStart(2, "0"), { x: MARGIN, y: y - 24, size: 30, font: serif, color: pink });
+    for (const text of titleLines) { y -= 24; page.drawText(text, { x: textX, y: y + 2, size: 20, font: serif, color: wine }); }
+    y -= 8;
     for (const row of instruction) { y -= 15.5; page.drawText(row, { x: textX, y, size: 10.5, font: sans, color: ink }); }
-    if (attributes) { y -= 20; spaced(page, attributes, textX, y, 8.5, sansBold, wine, 0.4); }
-    if (needs.length) {
+    if (chips.length) {
+      y -= 14;
+      let chipX = textX;
+      for (const text of chips) {
+        const width = sans.widthOfTextAtSize(text, 8.5) + 20;
+        if (chipX + width > PAGE.width - MARGIN) break;
+        roundRect(page, chipX, y, width, 20, 10, rgb(1, 1, 1), wine);
+        page.drawText(text, { x: chipX + 10, y: y - 13.5, size: 8.5, font: sans, color: wine });
+        chipX += width + 7;
+      }
       y -= 22;
-      label(page, "You'll need", textX, y, rose);
-      for (const row of needs) { y -= 14; page.drawText(row, { x: textX, y, size: 10, font: sans, color: ink }); }
+    }
+    if (needs.length) {
+      y -= 14;
+      roundRect(page, textX, y, textWidth, needsHeight, 10, card, line);
+      label(page, "You'll need", textX + 14, y - 20, wine);
+      needs.forEach((row, rowIndex) => page.drawText(row, { x: textX + 14, y: y - 38 - rowIndex * 14, size: 10, font: sans, color: ink }));
+      y -= needsHeight;
     }
     if (tip.length) {
-      y -= 24;
-      const top = y + 14;
-      label(page, "Lumora tip", textX + 12, y, rose);
-      for (const row of tip) { y -= 13.5; page.drawText(row, { x: textX + 12, y, size: 9.5, font: sansItalic, color: muted }); }
-      page.drawLine({ start: { x: textX, y: top }, end: { x: textX, y: y - 3 }, thickness: 1.2, color: colour("#e4cfc6") });
+      y -= 12;
+      roundRect(page, textX, y, textWidth, tipHeight, 10, peach, undefined, 0.55);
+      label(page, "Lumora tip", textX + 14, y - 20, coral);
+      tip.forEach((row, rowIndex) => page.drawText(row, { x: textX + 14, y: y - 38 - rowIndex * 14, size: 10, font: sansItalic, color: wine }));
+      y -= tipHeight;
     }
-    y -= 8;
+    y -= 12;
   });
 
   // Closing disclaimer
   const disclaimer = wrap(tutorial.disclaimer, sansItalic, 8.5, CONTENT_WIDTH);
-  ensure(30 + disclaimer.length * 12);
+  ensure(50 + disclaimer.length * 12);
   y -= 22;
   page.drawLine({ start: { x: MARGIN, y }, end: { x: PAGE.width - MARGIN, y }, thickness: 0.5, color: line });
-  y -= 16;
+  y -= 18;
   for (const row of disclaimer) { page.drawText(row, { x: MARGIN, y, size: 8.5, font: sansItalic, color: muted }); y -= 12; }
 
   pages.forEach((target, index) => {
+    if (index === 0) return;
     spaced(target, "LUMORA BEAUTY  ·  lumorabeauty.ai", MARGIN, 34, 7, sans, muted, 1.2);
     const number = `${index + 1} / ${pages.length}`;
     target.drawText(number, { x: PAGE.width - MARGIN - sans.widthOfTextAtSize(number, 7.5), y: 34, size: 7.5, font: sans, color: muted });

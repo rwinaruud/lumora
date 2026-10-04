@@ -6,7 +6,7 @@ import { trackEvent, trackEventOnce } from "@/lib/analytics";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { curatedLooks, heroPortrait, type CuratedLook } from "@/app/data/lumora-data";
 import { clearStoredJobId, createJobId, readStoredJobId, storeJobId, waitForPoll } from "@/lib/generation-job-client";
-import { createStoryFile } from "@/lib/story-image";
+import { createPostFile, createStoryFile } from "@/lib/story-image";
 import { SiteFooter } from "./site-footer";
 import type { LookAnalysis, LookAnalysisCategories, LookAnalysisInput, LookCategory } from "@/lib/look-analysis";
 import type { LookGenerationResult } from "@/lib/look-generation";
@@ -175,6 +175,7 @@ export default function LumoraExperience() {
   const [comparison, setComparison] = useState<"before" | "after">("after");
   const [region, setRegion] = useState("Netherlands");
   const [feedback, setFeedback] = useState("");
+  const [storyPreview, setStoryPreview] = useState<{ src: string; url: string } | null>(null);
   const [lookAnalysis, setLookAnalysis] = useState<LookAnalysis | null>(null);
   const [lookAnalysisError, setLookAnalysisError] = useState<string | null>(null);
   const startedGenerationAttempt = useRef<number | null>(null);
@@ -197,6 +198,18 @@ export default function LumoraExperience() {
     let isActive = true;
     createStoryFile(generatedImage).then((file) => { if (isActive) storyFileRef.current = { src: generatedImage, file }; }).catch(() => undefined);
     return () => { isActive = false; };
+  }, [screen, generatedImage]);
+  useEffect(() => {
+    if (screen !== "share" || !generatedImage) return;
+    let isActive = true;
+    let url: string | null = null;
+    const cached = storyFileRef.current?.src === generatedImage ? Promise.resolve(storyFileRef.current.file) : createStoryFile(generatedImage);
+    cached.then((file) => {
+      if (!isActive) return;
+      url = URL.createObjectURL(file);
+      setStoryPreview({ src: generatedImage, url });
+    }).catch(() => undefined);
+    return () => { isActive = false; if (url) URL.revokeObjectURL(url); };
   }, [screen, generatedImage]);
   useEffect(() => {
     if (screen === "result" && resultId) trackEventOnce(`result_viewed:${resultId}`, "result_viewed", { provider: "openai" });
@@ -338,12 +351,17 @@ export default function LumoraExperience() {
       setFeedback("Sharing isn't available here. Try Save Story instead.");
     }
   }
-  async function saveStory() {
+  async function saveStory(kind: "story" | "post" = "story") {
     setFeedback("");
     if (!generatedImage) { setFeedback("Your Story is not ready yet."); return; }
     try {
-      const file = storyFileRef.current?.src === generatedImage ? storyFileRef.current.file : await createStoryFile(generatedImage);
-      storyFileRef.current = { src: generatedImage, file };
+      let file: File;
+      if (kind === "post") {
+        file = await createPostFile(generatedImage);
+      } else {
+        file = storyFileRef.current?.src === generatedImage ? storyFileRef.current.file : await createStoryFile(generatedImage);
+        storyFileRef.current = { src: generatedImage, file };
+      }
       // iOS Safari ignores <a download>; the share sheet offers "Save Image" and "Save to Files".
       if (navigator.canShare?.({ files: [file] })) {
         try { await navigator.share({ files: [file], title: "My Lumora Story" }); trackEvent("story_saved", { method: "share_sheet" }); return; }
@@ -407,7 +425,6 @@ export default function LumoraExperience() {
     }
   }
 
-  const resultImage = generatedImage ?? heroPortrait;
   const chosenInspiration = inspirationPhoto ? { src: inspirationPhoto.src, alt: "Your uploaded makeup inspiration" } : selectedLook ? { src: selectedLook.image, alt: `${selectedLook.name} makeup look` } : null;
 
   return <main className="site-shell">
@@ -467,8 +484,8 @@ export default function LumoraExperience() {
       {feedback && <p className="feedback" role="status">{feedback}</p>}</section>}
 
     {screen === "share" && <section className="share-page"><div className="flow-heading"><h1>Your Story is <em>ready.</em></h1></div>
-      <div className="story-preview"><Photo src={resultImage} alt="Your Lumora in a social Story preview" /><div className="story-top"><span>LUMORA</span><small>BEAUTY, MADE PERSONAL</small></div><div className="story-bottom"><span>Made with Lumora</span><strong>See the look.<br /><em>On you.</em></strong><small>lumorabeauty.ai</small></div></div>
-      <div className="share-actions"><button className="button button-primary" type="button" onClick={() => void shareLook()}>Share <Icon name="share" /></button><button className="button button-secondary" type="button" onClick={saveStory}>Save Story <Icon name="download" /></button></div><p className="privacy-note">Nothing is posted without your permission.</p>{feedback && <p className="feedback" role="status">{feedback}</p>}</section>}
+      <div className="story-preview">{storyPreview?.src === generatedImage && <img /* eslint-disable-line @next/next/no-img-element */ src={storyPreview.url} alt="Your Lumora in a social Story preview" />}</div>
+      <div className="share-actions"><button className="button button-primary" type="button" onClick={() => void shareLook()}>Share <Icon name="share" /></button><button className="button button-secondary" type="button" onClick={() => void saveStory()}>Save Story <Icon name="download" /></button><button className="button button-secondary" type="button" onClick={() => void saveStory("post")}>Save Post <Icon name="download" /></button></div><p className="privacy-note">Nothing is posted without your permission.</p>{feedback && <p className="feedback" role="status">{feedback}</p>}</section>}
 
     {screen === "shop" && <section className="shop-page"><div className="shop-heading"><div className="flow-heading"><span className="eyebrow">A FEW GOOD THINGS</span><h1>Get this look</h1><p>Everything you need to recreate your Lumora.</p></div>
       <label className="region-select">SHOPPING FOR <span aria-hidden="true">·</span><select value={region} onChange={(event) => setRegion(event.target.value)} aria-label="Shopping region"><option>Netherlands</option><option>Belgium</option><option>Germany</option><option>France</option></select></label></div>
