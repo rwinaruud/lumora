@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { PurchaseTracker } from "@/app/components/purchase-tracker";
-import { getStripeClient } from "@/lib/stripe-server";
+import { getStripeClient, tutorialPdfProduct } from "@/lib/stripe-server";
 import { SiteFooter } from "@/app/components/site-footer";
 
 async function isVerifiedPayment(sessionId: string): Promise<boolean> {
   try {
     const session = await getStripeClient().checkout.sessions.retrieve(sessionId);
     const resultId = session.metadata?.lumoraResultId;
-    return session.status === "complete" && session.payment_status === "paid" && session.mode === "payment" && session.currency === "eur" && session.amount_total === 195 && !!resultId && session.client_reference_id === resultId;
+    return session.status === "complete" && session.payment_status === "paid" && session.mode === "payment" && session.currency === "eur" && session.amount_total === 195 && !!resultId && session.client_reference_id === resultId && session.metadata?.lumoraProduct !== tutorialPdfProduct;
   } catch {
     return false;
   }

@@ -5,7 +5,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: "*",
       allow: "/",
-      disallow: ["/api/", "/share/", "/download", "/tutorial/"],
+      disallow: ["/api/", "/share/", "/download", "/tutorial/", "/tutorial-pdf"],
     },
     sitemap: "https://lumorabeauty.ai/sitemap.xml",
   };

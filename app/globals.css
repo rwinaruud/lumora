@@ -165,3 +165,8 @@ a.brand { text-decoration: none; min-height: 44px; justify-content: center; }
 .tutorial-step-body p.tutorial-tip { padding-left: 12px; border-left: 2px solid #e4cfc6; font-style: italic; }
 .tutorial-step-body p.tutorial-tip span { font-style: normal; }
 .tutorial-page>.privacy-note { margin-top: 14px; text-align: center; }
+.tutorial-keep { width: 100%; margin: 0 0 22px; padding: 26px 22px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; border: 1px solid #eadbd3; border-radius: 4px; background: rgba(255,253,250,.9); }
+.tutorial-keep h2 { margin: 0; font-family: var(--serif); font-size: 26px; font-weight: 400; }
+.tutorial-keep p { margin: 0; max-width: 360px; color: var(--muted); font-size: 14px; line-height: 1.55; }
+.tutorial-keep .button { margin-top: 8px; }
+.tutorial-keep .tutorial-keep-error { color: var(--wine); font-size: 13px; }

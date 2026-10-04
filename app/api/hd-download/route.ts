@@ -1,5 +1,5 @@
 import { readPrivateResult } from "@/lib/generated-result-storage";
-import { getStripeClient } from "@/lib/stripe-server";
+import { getStripeClient, tutorialPdfProduct } from "@/lib/stripe-server";
 import sharp from "sharp";
 
 export const runtime = "nodejs";
@@ -25,6 +25,7 @@ export async function GET(request: Request) {
       || !resultId
       || !resultIdPattern.test(resultId)
       || session.client_reference_id !== resultId
+      || session.metadata?.lumoraProduct === tutorialPdfProduct
     ) {
       return Response.json({ error: { code: "PAYMENT_NOT_VERIFIED", message: "Payment could not be verified for this Lumora download." } }, { status: 403, headers: { "Cache-Control": "no-store" } });
     }

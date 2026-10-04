@@ -4,8 +4,9 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { SiteFooter } from "@/app/components/site-footer";
 import { TutorialViewTracker } from "@/app/components/tutorial-view-tracker";
-import { readLookAnalysis, readMakeupTutorial } from "@/lib/generated-result-storage";
-import { buildMakeupTutorial, normalizeStoredTutorial, type TutorialProductSlot } from "@/lib/look-tutorial";
+import { TutorialPdfCta } from "@/app/components/tutorial-pdf-cta";
+import type { TutorialProductSlot } from "@/lib/look-tutorial";
+import { resolveTutorial } from "@/lib/look-tutorial/resolve";
 
 const resultIdPattern = /^[A-Za-z0-9_-]{43}$/;
 
@@ -26,15 +27,8 @@ function StepProducts({ slots }: { slots: TutorialProductSlot[] }) {
 export default async function TutorialPage({ params }: PageProps<"/tutorial/[resultId]">) {
   const { resultId } = await params;
   if (!resultIdPattern.test(resultId)) notFound();
-  const stored = await readMakeupTutorial(resultId);
-  if (!stored) notFound();
-  // Tutorials saved with the first schema are rebuilt in memory from the stored analysis (nothing is overwritten); without one they render as saved.
-  let tutorial = normalizeStoredTutorial(stored);
-  if ((stored as { schemaVersion?: string }).schemaVersion !== "2.0") {
-    const analysis = await readLookAnalysis(resultId).catch(() => null);
-    const rebuilt = analysis ? buildMakeupTutorial(analysis) : null;
-    if (rebuilt && rebuilt.steps.length >= 2) tutorial = rebuilt;
-  }
+  const tutorial = await resolveTutorial(resultId);
+  if (!tutorial) notFound();
 
   return <main className="site-shell">
     <TutorialViewTracker viewKey={resultId} stepCount={tutorial.steps.length} difficulty={tutorial.difficulty} />
@@ -73,6 +67,7 @@ export default async function TutorialPage({ params }: PageProps<"/tutorial/[res
           </div>
         </li>)}
       </ol>
+      <TutorialPdfCta resultId={resultId} />
       <Link className="button button-primary" href="/">Create another Lumora <span aria-hidden="true">→</span></Link>
       <p className="privacy-note">{tutorial.disclaimer}</p>
     </article>

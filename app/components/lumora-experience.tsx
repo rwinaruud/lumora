@@ -1,5 +1,6 @@
 "use client";
 
+import { SHOW_GET_THIS_LOOK } from "@/lib/feature-flags";
 import Image from "next/image";
 import { trackEvent, trackEventOnce } from "@/lib/analytics";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
@@ -447,7 +448,7 @@ export default function LumoraExperience() {
         <div className="comparison-toggle" role="group" aria-label="Compare your photo and Lumora preview"><button type="button" className={comparison === "before" ? "active" : ""} aria-pressed={comparison === "before"} onClick={() => setComparison("before")}>Before</button><button type="button" className={comparison === "after" ? "active" : ""} aria-pressed={comparison === "after"} onClick={() => setComparison("after")}>After</button></div></div>
       <div className="result-actions">
         <article className="result-action"><span className="action-icon"><Icon name="share" /></span><div><h2>Share your look <span className="action-free">Free</span></h2><p>Show your Lumora on Instagram, TikTok or Stories.</p></div><button className="button button-primary" type="button" onClick={() => void shareLook("result")}>Share <Icon name="arrow-right" /></button></article>
-        <article className="result-action"><span className="action-icon"><Icon name="sparkle" /></span><div><h2>Love the look?</h2><p>Recreate it in real life.</p></div><button className="button button-secondary" type="button" onClick={() => { setFeedback(""); trackEvent("get_this_look_clicked", { has_analysis: !!lookAnalysis }); setScreen("shop"); }}>Get this look <Icon name="arrow-right" /></button></article>
+        {SHOW_GET_THIS_LOOK && <article className="result-action"><span className="action-icon"><Icon name="sparkle" /></span><div><h2>Love the look?</h2><p>Recreate it in real life.</p></div><button className="button button-secondary" type="button" onClick={() => { setFeedback(""); trackEvent("get_this_look_clicked", { has_analysis: !!lookAnalysis }); setScreen("shop"); }}>Get this look <Icon name="arrow-right" /></button></article>}
         <article className="result-action"><span className="action-icon"><Icon name="sparkle" /></span><div><h2>Makeup tutorial</h2><p>Personalised step-by-step for your look · Free</p></div>{resultId && tutorialReadyFor === resultId
           ? <a className="button button-secondary" href={`/tutorial/${encodeURIComponent(resultId)}`} target="_blank" rel="noopener">View my makeup tutorial <Icon name="arrow-right" /></a>
           : <button className="button button-secondary" type="button" disabled={!resultId || tutorialLoading} onClick={() => { void createTutorial(); }}>{tutorialLoading ? "Creating your tutorial…" : "Create my makeup tutorial"} <Icon name="arrow-right" /></button>}</article>
