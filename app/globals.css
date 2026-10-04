@@ -159,5 +159,9 @@ a.brand { text-decoration: none; min-height: 44px; justify-content: center; }
 .tutorial-step-number { color: #b98f88; font-family: var(--serif); font-size: 26px; line-height: 1; }
 .tutorial-step-body p { margin-top: 8px; color: var(--ink); font-size: 14px; line-height: 1.6; }
 .tutorial-step-body .tutorial-chips { margin-top: 12px; justify-content: flex-start; }
-.tutorial-tips { margin: 12px 0 0; padding: 0; list-style: none; font-style: italic; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.tutorial-step-body p.tutorial-needs,.tutorial-step-body p.tutorial-tip { margin-top: 14px; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.tutorial-needs span,.tutorial-tip span { display: block; margin-bottom: 3px; color: #8f625f; font-size: 9px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; }
+.tutorial-step-body p.tutorial-needs { color: var(--ink); }
+.tutorial-step-body p.tutorial-tip { padding-left: 12px; border-left: 2px solid #e4cfc6; font-style: italic; }
+.tutorial-step-body p.tutorial-tip span { font-style: normal; }
 .tutorial-page>.privacy-note { margin-top: 14px; text-align: center; }

@@ -2,6 +2,13 @@ import type { ProductMatchCategoryName, ProductMatchRequirement } from "@/lib/lo
 
 export type TutorialPhase = "complexion" | "brows" | "eyes" | "lashes_liner" | "cheeks" | "lips" | "finish";
 
+// Generic product or tool type for "You'll need". No brands. A future affiliate block can map each item through its category.
+export type TutorialTool = {
+  label: string;
+  kind: "product" | "tool";
+  category: ProductMatchCategoryName | null;
+};
+
 // Metadata only. A future affiliate block fills "Products for this step" by matching on this slot.
 export type TutorialProductSlot = {
   category: ProductMatchCategoryName;
@@ -15,14 +22,16 @@ export type TutorialStep = {
   category: ProductMatchCategoryName;
   attributes: { colour: string | null; finish: string | null; intensity: string | null; undertone: string | null };
   instruction: string;
-  tips: string[];
+  tools: TutorialTool[];
+  tip: string | null;
+  minutes: number;
   productSlots: TutorialProductSlot[];
 };
 
 export type TutorialSwatch = { label: string; colour: string | null; colourFamily: string; finish: string | null };
 
 export type MakeupTutorial = {
-  schemaVersion: "1.0";
+  schemaVersion: "2.0";
   title: string;
   summary: string;
   estimatedMinutes: number;

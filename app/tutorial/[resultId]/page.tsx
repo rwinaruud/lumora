@@ -4,8 +4,8 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { SiteFooter } from "@/app/components/site-footer";
 import { TutorialViewTracker } from "@/app/components/tutorial-view-tracker";
-import { readMakeupTutorial } from "@/lib/generated-result-storage";
-import type { TutorialProductSlot } from "@/lib/look-tutorial";
+import { readLookAnalysis, readMakeupTutorial } from "@/lib/generated-result-storage";
+import { buildMakeupTutorial, normalizeStoredTutorial, type TutorialProductSlot } from "@/lib/look-tutorial";
 
 const resultIdPattern = /^[A-Za-z0-9_-]{43}$/;
 
@@ -26,8 +26,15 @@ function StepProducts({ slots }: { slots: TutorialProductSlot[] }) {
 export default async function TutorialPage({ params }: PageProps<"/tutorial/[resultId]">) {
   const { resultId } = await params;
   if (!resultIdPattern.test(resultId)) notFound();
-  const tutorial = await readMakeupTutorial(resultId);
-  if (!tutorial) notFound();
+  const stored = await readMakeupTutorial(resultId);
+  if (!stored) notFound();
+  // Tutorials saved with the first schema are rebuilt in memory from the stored analysis (nothing is overwritten); without one they render as saved.
+  let tutorial = normalizeStoredTutorial(stored);
+  if ((stored as { schemaVersion?: string }).schemaVersion !== "2.0") {
+    const analysis = await readLookAnalysis(resultId).catch(() => null);
+    const rebuilt = analysis ? buildMakeupTutorial(analysis) : null;
+    if (rebuilt && rebuilt.steps.length >= 2) tutorial = rebuilt;
+  }
 
   return <main className="site-shell">
     <TutorialViewTracker viewKey={resultId} stepCount={tutorial.steps.length} difficulty={tutorial.difficulty} />
@@ -60,7 +67,8 @@ export default async function TutorialPage({ params }: PageProps<"/tutorial/[res
             <h2>{step.title}</h2>
             <p>{step.instruction}</p>
             {(step.attributes.colour || step.attributes.finish || step.attributes.intensity) && <ul className="tutorial-chips">{[step.attributes.colour, step.attributes.finish, step.attributes.intensity].filter(Boolean).map((chip) => <li key={chip}>{chip}</li>)}</ul>}
-            {step.tips.length > 0 && <ul className="tutorial-tips">{step.tips.map((tip) => <li key={tip}>{tip}</li>)}</ul>}
+            {step.tools.length > 0 && <p className="tutorial-needs"><span>You&apos;ll need</span>{step.tools.map((item) => item.label).join(" · ")}</p>}
+            {step.tip && <p className="tutorial-tip"><span>Lumora tip</span>{step.tip}</p>}
             <StepProducts slots={step.productSlots} />
           </div>
         </li>)}
